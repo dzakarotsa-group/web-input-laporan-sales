@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7fb">
+    <meta name="description" content="Preview aplikasi input leads dan follow-up.">
+    <title>Lead Desk — Preview</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="login-view" id="login-view">
+      <div class="login-card">
+        <div class="brand-mark brand-mark-large" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/><circle cx="19" cy="6" r="1"/></svg>
+        </div>
+        <p class="eyebrow">LEAD MANAGEMENT</p>
+        <h1>Semua follow-up,<br>lebih teratur.</h1>
+        <p class="login-copy">Masuk untuk mengelola lead dan hasil follow-up dalam satu tempat.</p>
+        <div class="login-roles" role="group" aria-label="Jenis akun">
+          <button type="button" class="login-role is-active" data-login-role="sales">Sales</button>
+          <button type="button" class="login-role" data-login-role="admin">Admin</button>
+        </div>
+        <form id="login-form" class="login-form">
+          <label class="field-label" for="login-email">Email
+            <input id="login-email" class="input-control" type="email" autocomplete="username" value="anisa@demo.local" required>
+          </label>
+          <label class="field-label" for="login-password">Password
+            <input id="login-password" class="input-control" type="password" inputmode="numeric" autocomplete="current-password" value="123456" required>
+          </label>
+          <div class="form-error is-hidden" id="login-error" role="alert"></div>
+          <button class="button button-primary button-full" type="submit">Masuk <span aria-hidden="true">→</span></button>
+        </form>
+        <div class="demo-note login-demo-note">
+          <span class="status-dot"></span>
+          <span id="login-demo-hint"><strong>Akun demo sales</strong><br>anisa@demo.local · 123456</span>
+        </div>
+        <p class="login-footnote">Preview lokal saja. Akun dan spreadsheet demo tidak menyimpan data sungguhan.</p>
+      </div>
+      <div class="login-decoration" aria-hidden="true">
+        <div class="decoration-orbit orbit-one"></div>
+        <div class="decoration-orbit orbit-two"></div>
+        <div class="decoration-dot"></div>
+      </div>
+    </div>
+
+    <div class="app-shell is-hidden" id="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="Lead Desk beranda">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/><circle cx="19" cy="6" r="1"/></svg></span>
+          <span>lead<span class="brand-light">desk</span></span>
+        </a>
+        <p class="nav-caption">MENU</p>
+        <nav class="side-nav" aria-label="Menu utama">
+          <button class="nav-item is-active sales-only" data-nav="overview" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span>Ringkasan</span>
+          </button>
+          <button class="nav-item sales-only" data-nav="leads" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8M18 14a5 5 0 0 1 3 4.6V20"/></svg>
+            <span>Data leads</span><span class="nav-count" id="nav-count">3</span>
+          </button>
+          <button class="nav-item sales-only" data-nav="follow-up" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-11.8 6.1L4 19l1.4-3.8A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8.5 11.5h7M12 8v7"/></svg>
+            <span>Follow-up</span>
+          </button>
+          <button class="nav-item is-hidden" id="admin-nav" data-nav="admin" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5c0 5 3.2 8.3 7.5 10 4.3-1.7 7.5-5 7.5-10V6L12 3Z"/><circle cx="12" cy="10" r="2.2"/><path d="M8.5 16a3.5 3.5 0 0 1 7 0"/></svg>
+            <span>Kelola sales</span>
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="sheet-status">
+            <span class="sheet-icon" aria-hidden="true">S</span>
+            <span><strong>Spreadsheet</strong><small id="sheet-status-label">Belum terhubung</small></span>
+            <span class="connection-dot"></span>
+          </div>
+          <button class="profile-button" id="logout-button" type="button">
+            <span class="avatar avatar-indigo" id="profile-avatar">A</span>
+            <span class="profile-name"><strong id="profile-name">Anisa</strong><small id="profile-role">Preview pengguna</small></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Workspace</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Ringkasan</strong></div>
+          <div class="topbar-actions">
+            <span class="preview-pill"><span class="status-dot"></span> PREVIEW</span>
+            <button class="icon-button" id="help-button" aria-label="Info preview" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.4 1.6c-1.1 1-2 1.4-2 3M12 17h.01"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="page-content" id="overview-page">
+          <div class="welcome-row">
+            <div>
+              <p class="eyebrow" id="today-date"></p>
+              <h1>Hai, <span id="welcome-name">Anisa</span> <span class="wave" aria-hidden="true">✦</span></h1>
+              <p class="muted">Pantau leads dan tindak lanjutmu hari ini.</p>
+            </div>
+            <button class="button button-primary sales-only" data-open-form="new-lead" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Tambah lead
+            </button>
+          </div>
+
+          <div class="demo-banner">
+            <span class="banner-icon" aria-hidden="true">i</span>
+            <div><strong>Ini masih preview dengan data contoh.</strong> Data tidak tersimpan ke Google Sheets dan akan ter-reset saat server dimulai ulang.</div>
+            <button class="banner-close" id="dismiss-banner" aria-label="Tutup pemberitahuan" type="button">×</button>
+          </div>
+
+          <div class="metrics-grid">
+            <article class="metric-card">
+              <div class="metric-top"><span>Total leads</span><span class="metric-icon icon-blue"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8M18 14a5 5 0 0 1 3 4.6V20"/></svg></span></div>
+              <div class="metric-number" id="metric-total">3</div>
+              <div class="metric-foot"><span class="metric-neutral">Semua data lead</span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Perlu follow-up</span><span class="metric-icon icon-amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+              <div class="metric-number" id="metric-pending">2</div>
+              <div class="metric-foot"><span class="metric-tag tag-amber">Terlambat &gt; 3 hari</span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Leads di-follow-up</span><span class="metric-icon icon-green"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span></div>
+              <div class="metric-number" id="metric-contacted">1</div>
+              <div class="metric-foot"><span class="metric-tag tag-green">FU setelah lead masuk</span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>FU hari ini</span><span class="metric-icon icon-purple"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span></div>
+              <div class="metric-number" id="metric-today">0</div>
+              <div class="metric-foot"><span class="metric-neutral">Catatan terbaru</span></div>
+            </article>
+          </div>
+
+          <div class="follow-up-alert is-hidden" id="follow-up-alert" role="status">
+            <span class="alert-icon" aria-hidden="true">!</span>
+            <div><strong>Perlu di-follow-up</strong><span id="follow-up-alert-message"></span></div>
+            <button type="button" class="button button-alert" data-nav="leads">Lihat leads <span aria-hidden="true">→</span></button>
+          </div>
+
+          <section class="content-card leads-card">
+            <div class="section-heading">
+              <div><h2>Leads terbaru</h2><p class="muted">Daftar lead yang sedang kamu kelola.</p></div>
+              <button class="button button-secondary" data-nav="leads" type="button">Lihat semua <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="table-toolbar">
+              <label class="search-box">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg>
+                <input id="lead-search" type="search" placeholder="Cari nama atau nomor HP" autocomplete="off">
+              </label>
+              <span class="table-count" id="table-count">3 leads</span>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead>
+                <tbody id="leads-table-body"></tbody>
+              </table>
+              <div class="empty-state is-hidden" id="empty-state">
+                <span class="empty-icon">⌕</span>
+                <strong>Lead tidak ditemukan</strong>
+                <span>Coba kata kunci lain.</span>
+              </div>
+            </div>
+          </section>
+          <footer class="page-footer"><span>Lead Desk <span aria-hidden="true">·</span> Preview</span><span>Spreadsheet belum tersambung</span></footer>
+        </section>
+
+        <section class="page-content is-hidden" id="leads-page">
+          <div class="welcome-row compact-welcome">
+            <div><p class="eyebrow">DATABASE</p><h1>Data leads</h1><p class="muted">Cari dan kelola lead yang sudah dimasukkan.</p></div>
+            <button class="button button-primary sales-only" data-open-form="new-lead" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah lead</button>
+          </div>
+          <section class="content-card">
+            <div class="table-toolbar page-table-toolbar">
+              <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><input id="lead-search-all" type="search" placeholder="Cari nama atau nomor HP" autocomplete="off"></label>
+              <span class="table-count" id="table-count-all">3 leads</span>
+            </div>
+            <div class="table-scroll">
+              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead><tbody id="leads-table-all"></tbody></table>
+              <div class="empty-state is-hidden" id="empty-state-all"><span class="empty-icon">⌕</span><strong>Lead tidak ditemukan</strong><span>Coba kata kunci lain.</span></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page-content is-hidden" id="follow-up-page">
+          <div class="welcome-row compact-welcome">
+            <div><p class="eyebrow">TINDAK LANJUT</p><h1>Follow-up lead</h1><p class="muted">Pilih lead, tentukan urutan follow-up, lalu simpan hasilnya.</p></div>
+          </div>
+          <div class="follow-up-layout">
+            <section class="content-card follow-up-form-card">
+              <div class="form-intro"><span class="form-step">01</span><div><h2>Catat hasil follow-up</h2><p class="muted">Pilih nama user yang sudah terdaftar.</p></div></div>
+              <form id="follow-up-form">
+                <label class="field-label" for="follow-up-lead">Nama user <span class="required">*</span></label>
+                <select id="follow-up-lead" class="input-control" required></select>
+                <p class="field-hint">Nomor HP dan domisili ditampilkan agar tidak tertukar.</p>
+
+                <label class="field-label spaced-label" for="follow-up-number">Follow-up ke <span class="required">*</span></label>
+                <div class="fu-picker" id="fu-picker" role="group" aria-label="Pilih urutan follow-up"></div>
+                <input type="hidden" id="follow-up-number" value="2">
+
+                <label class="field-label spaced-label" for="follow-up-date">Tanggal follow-up <span class="required">*</span></label>
+                <input id="follow-up-date" class="input-control" type="date" required>
+                <p class="field-hint" id="late-input-hint">Isi tanggal saat follow-up dilakukan. Peringatan muncul bila dicatat setelah lewat H+1.</p>
+                <div class="late-input-alert is-hidden" id="late-input-alert" role="status">⚠ Tanggal ini sudah melewati H+1. Follow-up akan ditandai terlambat diinput.</div>
+
+                <label class="field-label spaced-label" for="follow-up-result">Hasil akhir <span class="required">*</span></label>
+                <textarea id="follow-up-result" class="input-control textarea-control" rows="5" maxlength="1000" placeholder="Tuliskan hasil follow-up secara singkat dan jelas..." required></textarea>
+                <div class="textarea-footer"><span>FU 1 otomatis tercatat saat lead masuk.</span><span id="char-count">0/1000</span></div>
+                <div class="form-error is-hidden" id="follow-up-error" role="alert"></div>
+                <button class="button button-primary button-full form-submit" type="submit"><span>Simpan hasil follow-up</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+              </form>
+            </section>
+            <aside class="content-card lead-preview-card">
+              <div class="preview-card-heading"><span class="preview-card-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/></svg></span><div><p class="eyebrow">PROFIL LEAD</p><h3 id="preview-name">Pilih lead</h3></div></div>
+              <div class="preview-details" id="preview-details"></div>
+              <div class="history-heading"><span>Riwayat follow-up</span><span class="history-count" id="history-count">0</span></div>
+              <div class="history-list" id="history-list"><p class="history-empty">Belum ada follow-up tercatat.</p></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page-content is-hidden" id="admin-page">
+          <div class="welcome-row compact-welcome">
+            <div><p class="eyebrow">ADMINISTRASI</p><h1>Kelola sales</h1><p class="muted">Daftarkan akun sales, hubungkan link spreadsheet, atau nonaktifkan akses.</p></div>
+            <button class="button button-primary" id="open-add-sales" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Daftarkan sales</button>
+          </div>
+          <div class="demo-banner admin-demo-banner">
+            <span class="banner-icon" aria-hidden="true">i</span>
+            <div><strong>Mode preview:</strong> akun, password dalam bentuk hash, dan link sheet hanya tersimpan di memori server. Belum menulis data ke Google Sheets.</div>
+          </div>
+          <section class="content-card admin-sales-card">
+            <div class="section-heading admin-sales-heading">
+              <div><h2>Akun sales</h2><p class="muted">Password tidak ditampilkan kembali setelah akun dibuat.</p></div>
+              <span class="table-count" id="sales-count">0 sales</span>
+            </div>
+            <div class="table-scroll">
+              <table class="admin-sales-table">
+                <thead><tr><th>Nama sales</th><th>Email login</th><th>Spreadsheet</th><th>Status</th><th>Akses</th></tr></thead>
+                <tbody id="sales-table-body"></tbody>
+              </table>
+              <div class="empty-state is-hidden" id="sales-empty"><strong>Belum ada akun sales</strong><span>Daftarkan sales untuk mulai mengelola akun.</span></div>
+            </div>
+          </section>
+          <p class="admin-security-note">Admin diminta login ulang setiap sesi browser. Untuk penggunaan nyata, gunakan HTTPS, database, serta koneksi Google OAuth/service account yang aman.</p>
+        </section>
+      </main>
+      <nav class="mobile-nav" aria-label="Navigasi bawah">
+        <button class="mobile-nav-item is-active sales-only" data-nav="overview" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Ringkasan</span></button>
+        <button class="mobile-nav-item sales-only" data-nav="leads" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8"/></svg><span>Leads</span></button>
+        <button class="mobile-nav-item sales-only" data-nav="follow-up" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-11.8 6.1L4 19l1.4-3.8A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8.5 11.5h7M12 8v7"/></svg><span>Follow-up</span></button>
+        <button class="mobile-nav-item is-hidden" id="mobile-admin-nav" data-nav="admin" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5c0 5 3.2 8.3 7.5 10 4.3-1.7 7.5-5 7.5-10V6L12 3Z"/><circle cx="12" cy="10" r="2.2"/></svg><span>Admin</span></button>
+      </nav>
+    </div>
+
+    <dialog class="modal" id="new-lead-modal">
+      <div class="modal-header"><div><p class="eyebrow">DATA BARU</p><h2>Tambah lead</h2><p class="muted">Isi informasi dasar lead yang masuk.</p></div><button class="icon-button close-modal" aria-label="Tutup" type="button">×</button></div>
+      <form id="new-lead-form">
+        <div class="form-grid">
+          <label class="field-label" for="lead-name">Nama user <span class="required">*</span><input class="input-control" id="lead-name" name="nameUser" type="text" maxlength="100" placeholder="Contoh: Dina Puspita" required></label>
+          <label class="field-label" for="lead-phone">Nomor HP <span class="required">*</span><input class="input-control" id="lead-phone" name="phone" type="tel" maxlength="30" placeholder="Contoh: 0812..." required></label>
+          <label class="field-label" for="lead-domicile">Domisili<input class="input-control" id="lead-domicile" name="domicile" type="text" maxlength="100" placeholder="Kota / kecamatan"></label>
+          <label class="field-label" for="lead-source">Sumber leads<input class="input-control" id="lead-source" name="source" type="text" maxlength="100" placeholder="Contoh: Instagram"></label>
+          <label class="field-label" for="lead-code">Kode leads<input class="input-control" id="lead-code" name="leadCode" type="text" maxlength="50" placeholder="Opsional"></label>
+          <label class="field-label" for="lead-sales">Nama sales<input class="input-control" id="lead-sales" name="salesName" type="text" maxlength="100" value="Anisa"></label>
+        </div>
+        <div class="form-error is-hidden" id="new-lead-error" role="alert"></div>
+        <div class="modal-actions"><button class="button button-secondary close-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan lead <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="add-sales-modal">
+      <div class="modal-header"><div><p class="eyebrow">AKUN BARU</p><h2>Daftarkan sales</h2><p class="muted">Email dan password ini diberikan kepada sales.</p></div><button class="icon-button close-sales-modal" aria-label="Tutup" type="button">×</button></div>
+      <form id="add-sales-form">
+        <div class="form-grid">
+          <label class="field-label" for="sales-name">Nama sales <span class="required">*</span><input id="sales-name" class="input-control" type="text" maxlength="100" placeholder="Contoh: Siti" required></label>
+          <label class="field-label" for="sales-email">Email login <span class="required">*</span><input id="sales-email" class="input-control" type="email" maxlength="254" placeholder="nama@email.com" required></label>
+          <label class="field-label" for="sales-password">Password angka <span class="required">*</span><input id="sales-password" class="input-control" type="password" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" placeholder="6–12 angka" required></label>
+          <label class="field-label" for="sales-sheet">Link spreadsheet sales <span class="required">*</span><input id="sales-sheet" class="input-control" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." required></label>
+        </div>
+        <p class="field-hint">Pastikan spreadsheet punya akses edit untuk integrasi yang akan disiapkan.</p>
+        <div class="form-error is-hidden" id="add-sales-error" role="alert"></div>
+        <div class="modal-actions"><button class="button button-secondary close-sales-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan akun <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
+      </form>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  </body>
+</html>
