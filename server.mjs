@@ -471,6 +471,7 @@ export async function handleRequest(request, response) {
           if (activeSession.salesId === account.id) sessions.delete(id);
         }
       }
+
       sendJson(response, 200, { sales: publicAccount(updatedAccount) });
     } catch (error) {
       sendRouteError(response, error, "Status sales tidak dapat diperbarui.");
@@ -593,3 +594,5 @@ export async function handleRequest(request, response) {
     }
   }
 }
+
+export default handleRequest;

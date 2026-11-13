@@ -26,7 +26,7 @@ The app's current login sessions remain in memory and will need to log in again 
 
 ## Deploy to Vercel
 
-Vercel serves the root HTML, CSS, and browser JavaScript as static files. The catch-all function in `api/[...path].js` handles the app's API routes, and local development continues to use `npm start`.
+Vercel uses the default request handler exported by `server.mjs` for the app. Local development continues to use `npm start`.
 
 1. Import this GitHub repository into Vercel.
 2. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` under the project's **Environment Variables**. Use a server-only Supabase secret/service-role key, not a publishable key, and do not add a `NEXT_PUBLIC_` prefix.
