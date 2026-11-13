@@ -567,7 +567,7 @@ export async function handleRequest(request, response) {
   }
 
   const asset = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-  if (!["index.html", "styles.css", "app.js"].includes(asset)) {
+  if (!["index.html", "styles.css", "client.js"].includes(asset)) {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Not found");
     return;
