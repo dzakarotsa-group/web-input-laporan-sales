@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
@@ -7,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
-const port = Number(process.env.PORT || 4173);
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (Boolean(supabaseUrl) !== Boolean(supabaseServiceRoleKey)) {
@@ -318,7 +316,7 @@ async function readJson(request) {
   return JSON.parse(body);
 }
 
-const server = createServer(async (request, response) => {
+export async function handleRequest(request, response) {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
   try {
 
@@ -594,9 +592,4 @@ const server = createServer(async (request, response) => {
       response.end();
     }
   }
-});
-
-const host = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
-server.listen(port, host, () => {
-  console.log(`Lead Desk demo running at http://127.0.0.1:${port}`);
-});
+}

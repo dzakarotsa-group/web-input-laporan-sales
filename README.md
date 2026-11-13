@@ -26,7 +26,7 @@ The app's current login sessions remain in memory and will need to log in again 
 
 ## Deploy to Vercel
 
-The root `server.ts` entry point lets Vercel run the existing Node.js server; local development continues to use `server.mjs`.
+The root `server.ts` entry point creates the HTTP server directly so Vercel can detect it. Local development continues to use `npm start`.
 
 1. Import this GitHub repository into Vercel.
 2. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` under the project's **Environment Variables**. Use a server-only Supabase secret/service-role key, not a publishable key, and do not add a `NEXT_PUBLIC_` prefix.
