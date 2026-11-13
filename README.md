@@ -24,6 +24,16 @@ When both Supabase variables are configured, demo seed sales/leads are not used;
 
 The app's current login sessions remain in memory and will need to log in again after a backend restart. The free Supabase plan can pause projects after inactivity and has plan-specific limits. Google Sheets writing is still not implemented; this setup only persists app data and spreadsheet links.
 
+## Deploy to Vercel
+
+The root `server.ts` entry point lets Vercel run the existing Node.js server; local development continues to use `server.mjs`.
+
+1. Import this GitHub repository into Vercel.
+2. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` under the project's **Environment Variables**. Use a server-only Supabase secret/service-role key, not a publishable key, and do not add a `NEXT_PUBLIC_` prefix.
+3. Deploy, then open `/api/health` on the deployment URL. A successful response reports `"mode":"supabase"`.
+
+Do not deploy with demo credentials or enter real customer information; the app's custom authentication and in-memory sessions are for preview use, and sessions are lost when the server restarts.
+
 ## Run locally
 
 1. Install Node.js 22 or newer.
