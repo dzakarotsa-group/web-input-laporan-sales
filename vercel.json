@@ -1,13 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    {
-      "source": "/api",
-      "destination": "/api/index?__lead_desk_path=/api"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "/api/index?__lead_desk_path=/api/:path*"
+  "functions": {
+    "server.mjs": {
+      "includeFiles": "{index.html,styles.css,client.js}"
     }
-  ]
+  }
 }
