@@ -346,9 +346,10 @@ const leadHeaderAliases = {
   domicile: ["domisili", "kota", "domicile"],
   source: ["sumberlead", "sumberleads", "sumber", "source"],
   leadCode: ["kodelead", "kodeleads", "leadcode"],
-  visitBooked: ["bookingvisit", "bookedvisit", "visitbooked"],
-  visitCompleted: ["sudahterlaksana", "visitdone", "visitcompleted"],
+  visitBooked: ["rencanavisit", "bookingvisit", "bookedvisit", "visitbooked"],
+  visitCompleted: ["visitterlaksana", "sudahterlaksana", "visitdone", "visitcompleted"],
   visitDate: ["tanggalvisit", "visitdate", "jadwalvisit"],
+  visitPlannedAt: ["tanggalrencanavisit", "wakturencanavisit", "visitplannedat", "waktucentangvisit"],
   createdAt: ["tanggal", "tanggallead", "tanggalmasuk", "createdat", "date", "column1"],
   finalResult: ["hasilakhir", "hasilfollowup", "hasilfu", "finalresult"],
   previousResult: ["hasilsebelumnya", "hasilsebelum", "previousresult"],
@@ -399,7 +400,7 @@ async function findLeadTable(targetSpreadsheetId) {
           if (schema.columns.followUpsJson === undefined && schema.columns.followUpDates[0] < 0) {
             throw new Error("Google Sheets request failed: Spreadsheet sales harus memiliki kolom FU 1 atau Follow-ups.");
           }
-          return { title, headerRow: index + 1, ...schema };
+          return { title, sheetId: sheet.properties.sheetId, headerRow: index + 1, ...schema };
         }
       }
     }
@@ -415,6 +416,21 @@ async function findLeadTable(targetSpreadsheetId) {
   });
   leadTableCache.set(targetSpreadsheetId, discovery);
   return discovery;
+}
+
+async function ensureVisitPlannedAtColumn(table, targetSpreadsheetId) {
+  if (table.columns.visitPlannedAt !== undefined) return;
+  const column = table.headers.length;
+  if (column >= 52) {
+    throw new Error("Google Sheets request failed: Tidak ada ruang kolom untuk mencatat waktu rencana visit.");
+  }
+  const range = `${quoteSheetTitle(table.title)}!${columnName(column)}${table.headerRow}`;
+  await sheetsRequest(`values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+    method: "PUT",
+    body: JSON.stringify({ values: [["Tanggal Rencana Visit"]] })
+  }, targetSpreadsheetId);
+  table.headers.push("Tanggal Rencana Visit");
+  table.columns.visitPlannedAt = column;
 }
 
 function spreadsheetDate(value) {
@@ -505,6 +521,8 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
     visitBooked: spreadsheetFlag(get(schema.columns.visitBooked)) || Boolean(spreadsheetDate(get(schema.columns.visitDate))),
     visitCompleted: spreadsheetFlag(get(schema.columns.visitCompleted)),
     visitDate: spreadsheetDate(get(schema.columns.visitDate)),
+    visitPlannedAt: String(get(schema.columns.visitPlannedAt)),
+    visitAvailable: schema.columns.visitBooked !== undefined,
     createdAt: createdDate ? `${createdDate}T00:00:00.000Z` : new Date().toISOString(),
     finalResult,
     followUps
@@ -618,6 +636,8 @@ async function createSalesLead(lead) {
   set("domicile", lead.domicile);
   set("source", lead.source);
   set("leadCode", lead.leadCode);
+  set("visitBooked", false);
+  set("visitPlannedAt", "");
   set("createdAt", spreadsheetDateValue(todayLocal()));
   set("ownerId", lead.ownerId);
   set("finalResult", lead.finalResult);
@@ -660,7 +680,9 @@ async function saveSalesLead(lead, followUpNumber) {
   };
   addUpdate(table.columns.finalResult, lead.finalResult);
   if (followUpNumber === null) {
-    for (const field of ["nameUser", "phone", "domicile", "source", "leadCode"]) {
+    for (const field of [
+      "nameUser", "phone", "domicile", "source", "leadCode", "visitBooked", "visitPlannedAt"
+    ]) {
       addUpdate(table.columns[field], lead[field]);
     }
     if (table.columns.id === undefined) {
@@ -982,6 +1004,47 @@ export async function handleRequest(request, response) {
     return;
   }
 
+  const visitPlanMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/visit-plan$/);
+  if (visitPlanMatch && request.method === "PATCH") {
+    if (session.role !== "sales") {
+      sendJson(response, 403, { error: "Akses data lead hanya untuk sales." });
+      return;
+    }
+    try {
+      const input = await readJson(request);
+      if (typeof input.visitBooked !== "boolean") {
+        sendJson(response, 400, { error: "Status rencana visit harus berupa centang atau tidak dicentang." });
+        return;
+      }
+      const lead = (await listSalesLeads(session.salesId))
+        .find((item) => item.id === decodeURIComponent(visitPlanMatch[1]));
+      if (!lead) {
+        sendJson(response, 404, { error: "Lead tidak ditemukan." });
+        return;
+      }
+      if (sheetsEnabled) {
+        const account = await findSalesAccountById(session.salesId);
+        if (!account) {
+          sendJson(response, 404, { error: "Akun sales tidak ditemukan." });
+          return;
+        }
+        const targetSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+        const table = await findLeadTable(targetSpreadsheetId);
+        if (table.columns.visitBooked === undefined) {
+          sendJson(response, 400, { error: "Kolom Rencana Visit tidak ditemukan di spreadsheet sales." });
+          return;
+        }
+        await ensureVisitPlannedAtColumn(table, targetSpreadsheetId);
+      }
+      lead.visitBooked = input.visitBooked;
+      lead.visitPlannedAt = input.visitBooked ? new Date().toISOString() : "";
+      sendJson(response, 200, { lead: await saveSalesLead(lead, null) });
+    } catch (error) {
+      sendRouteError(response, error, "Rencana visit tidak dapat diperbarui.");
+    }
+    return;
+  }
+
   const followUpMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/follow-ups$/);
   if (followUpMatch && request.method === "POST") {
     if (session.role !== "sales") {
@@ -1025,7 +1088,7 @@ export async function handleRequest(request, response) {
   }
 
   const asset = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-  if (!["index.html", "styles.css", "client.js"].includes(asset)) {
+  if (!["index.html", "styles.css", "client.js", "visit-schedule.js"].includes(asset)) {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Not found");
     return;

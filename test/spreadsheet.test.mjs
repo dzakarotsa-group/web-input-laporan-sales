@@ -35,7 +35,7 @@ test("existing sales sheet data is continued in place and kept separate per sale
   const legacyHeaders = [
     "Column 1", "Nama Sales", "Nama User", "Nomor HP", "Domisili", "Sumber Leads", "Kode Leads",
     "FU 1", "FU 2", "FU 3", "FU 4", "FU 5", "FU 6", "FU 7", "FU 8",
-    "Booking Visit?", "Sudah Terlaksana?", "Tanggal Visit", "Closing", "Tanggal Closing",
+    "Rencana Visit", "Visit Terlaksana", "Kode Leads Visit", "Closing", "Kode Leads Closing",
     "Hasil Akhir", "Hasil Sebelumnya", "Indikator", "Column 1", "Column 2", "Tanggal Closing"
   ];
   const previousLead = Array(legacyHeaders.length).fill("");
@@ -49,7 +49,7 @@ test("existing sales sheet data is continued in place and kept separate per sale
   previousLead[7] = "01/06/2026";
   previousLead[8] = "02/06/2026";
   previousLead[15] = "TRUE";
-  previousLead[17] = dateOffset(1);
+  previousLead[17] = "LD-VISIT-LAMA";
   previousLead[20] = "Pernah dihubungi";
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
@@ -120,6 +120,13 @@ test("existing sales sheet data is continued in place and kept separate per sale
       const rowNumber = rows.length + 1;
       rows.push(...body.values);
       return Response.json({ updates: { updatedRange: `${title}!A${rowNumber}:Z${rowNumber}` } });
+    } else if (/^[A-Z]+\d+$/.test(cells)) {
+      const cell = cells.match(/^([A-Z]+)(\d+)$/);
+      const column = [...cell[1]].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+      const rowNumber = Number(cell[2]);
+      while (rows.length < rowNumber) rows.push([]);
+      while (rows[rowNumber - 1].length <= column) rows[rowNumber - 1].push("");
+      rows[rowNumber - 1][column] = body.values[0][0];
     } else {
       rows[firstRow - 1] = body.values[0];
     }
@@ -190,7 +197,9 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(result.data.leads[0].nameUser, "Lead Sebelumnya");
     assert.equal(result.data.leads[0].followUps[1].result, "Pernah dihubungi");
     assert.equal(result.data.leads[0].visitBooked, true);
-    assert.equal(result.data.leads[0].visitDate, dateOffset(1));
+    assert.equal(result.data.leads[0].visitDate, "");
+    assert.equal(result.data.leads[0].visitPlannedAt, "");
+    assert.equal(result.data.leads[0].visitAvailable, true);
     assert.equal(result.data.leads[0].visitCompleted, false);
 
     result = await request(app.base, `/api/leads/${oldLeadId}`, {
@@ -206,6 +215,27 @@ test("existing sales sheet data is continued in place and kept separate per sale
     });
     assert.equal(result.response.status, 200, JSON.stringify(result.data));
     assert.equal(result.data.lead.domicile, "Sidoarjo");
+
+    result = await request(app.base, `/api/leads/${oldLeadId}/visit-plan`, {
+      method: "PATCH",
+      cookie: salesCookie,
+      body: { visitBooked: false }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.visitBooked, false);
+    assert.equal(result.data.lead.visitPlannedAt, "");
+
+    result = await request(app.base, `/api/leads/${oldLeadId}/visit-plan`, {
+      method: "PATCH",
+      cookie: salesCookie,
+      body: { visitBooked: true }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.visitBooked, true);
+    assert.ok(Date.parse(result.data.lead.visitPlannedAt));
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[0][26], "Tanggal Rencana Visit");
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][15], true);
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][26], result.data.lead.visitPlannedAt);
 
     result = await request(app.base, "/api/leads", {
       method: "POST",
@@ -302,6 +332,8 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(newLead.nameUser, "Dina Diperbarui");
     assert.equal(existingLead.followUps[2].result, "FU lama diteruskan");
     assert.equal(existingLead.followUps.find((item) => item.number === 8).result, "FU terakhir terlambat");
+    assert.equal(existingLead.visitBooked, true);
+    assert.equal(existingLead.visitPlannedAt, workbooks.get("siti-sheet-id").get("Input Harian")[1][26]);
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian").length, 3);
     assert.equal(workbooks.get("siti-sheet-id").has("leads"), false);
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[2][20], "Sudah dihubungi");

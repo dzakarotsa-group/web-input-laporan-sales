@@ -145,13 +145,14 @@
 
           <section class="content-card priority-visits-card">
             <div class="section-heading">
-              <div><h2>Prioritas visit</h2><p class="muted">Lead yang sudah booking visit dan jadwalnya.</p></div>
-              <span class="table-count" id="priority-visit-count">0 jadwal</span>
+              <div><h2>Rencana visit minggu ini</h2><p class="muted">Hari diambil dari hasil FU; minggu dihitung Minggu–Sabtu.</p></div>
+              <span class="table-count" id="priority-visit-count">0 minggu ini</span>
             </div>
             <div class="priority-visit-list" id="priority-visit-list"></div>
+            <p class="visit-history-note is-hidden" id="priority-visit-note" role="status"></p>
             <div class="empty-state is-hidden" id="priority-visit-empty">
-              <strong>Belum ada jadwal visit</strong>
-              <span>Jadwal dari kolom Booking Visit? dan Tanggal Visit akan muncul di sini.</span>
+              <strong>Belum ada rencana visit minggu ini</strong>
+              <span>Centang Rencana Visit dan tulis harinya pada hasil FU, misalnya “Janji visit hari Minggu”.</span>
             </div>
           </section>
 
@@ -169,13 +170,13 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead>
                 <tbody id="leads-table-body"></tbody>
               </table>
               <div class="empty-state is-hidden" id="empty-state">
                 <span class="empty-icon">⌕</span>
                 <strong>Belum ada lead terbaru</strong>
-                <span>Lead dengan nama atau nomor HP akan ditampilkan di sini.</span>
+                <span>Lead dengan nama akan ditampilkan di sini.</span>
               </div>
             </div>
           </section>
@@ -194,7 +195,7 @@
               <span class="table-count" id="table-count-all">3 leads</span>
             </div>
             <div class="table-scroll">
-              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead><tbody id="leads-table-all"></tbody></table>
+              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead><tbody id="leads-table-all"></tbody></table>
               <div class="empty-state is-hidden" id="empty-state-all"><span class="empty-icon">⌕</span><strong>Lead tidak ditemukan</strong><span>Coba kata kunci lain.</span></div>
             </div>
           </section>

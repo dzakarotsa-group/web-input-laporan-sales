@@ -1,3 +1,5 @@
+import { sundayToSaturdayRange, visitDateThisWeek } from "./visit-schedule.js";
+
 const state = {
   leads: [],
   sales: [],
@@ -89,7 +91,7 @@ function lastActivity(lead) {
 }
 
 function displayableLeads() {
-  return state.leads.filter((lead) => String(lead.nameUser || "").trim() || String(lead.phone || "").trim());
+  return state.leads.filter((lead) => String(lead.nameUser || "").trim());
 }
 
 function isFollowedUp(lead) {
@@ -151,6 +153,7 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       ${columns}
       <td>${safeText(lead.domicile || "—")}</td>
       <td><span class="source-pill">${safeText(lead.source || "Lainnya")}</span></td>
+      <td>${renderVisitToggle(lead)}</td>
       <td>${safeText(lastActivity(lead))}</td>
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
       <td><div class="row-actions"><button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Buat atau edit follow-up untuk ${safeText(lead.nameUser)}">›</button></div></td>
@@ -161,6 +164,12 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
     ? `${filtered.length} lead${filtered.length === 1 ? "" : "s"} terbaru`
     : `${filtered.length} lead${filtered.length === 1 ? "" : "s"}`;
   if (!isOverview) updateLeadFilterSummary();
+}
+
+function renderVisitToggle(lead) {
+  const checked = Boolean(lead.visitBooked);
+  const unavailable = lead.visitAvailable === false;
+  return `<button class="visit-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit="${safeText(lead.id)}" aria-pressed="${checked}"${unavailable ? ' disabled title="Kolom Rencana Visit tidak ditemukan di spreadsheet"' : ""}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : ""}</span><span>Rencana visit</span></button>`;
 }
 
 function renderMetrics() {
@@ -182,28 +191,32 @@ function renderMetrics() {
 }
 
 function renderPriorityVisits() {
-  const scheduled = displayableLeads()
-    .filter((lead) => (lead.visitBooked || lead.visitDate) && !lead.visitCompleted)
-    .sort((left, right) => {
-      const leftDate = left.visitDate || "9999-12-31";
-      const rightDate = right.visitDate || "9999-12-31";
-      return leftDate.localeCompare(rightDate);
-    });
+  const [weekStart, weekEnd] = sundayToSaturdayRange(todayLocal());
+  const planned = displayableLeads().filter((lead) => lead.visitBooked && !lead.visitCompleted);
+  const scheduled = planned
+    .map((lead) => ({ lead, date: visitDateThisWeek(lead, weekStart) }))
+    .filter(({ date }) => date && date >= weekStart && date <= weekEnd)
+    .sort((left, right) => left.date.localeCompare(right.date));
+  const missingDayCount = planned.filter((lead) => !visitDateThisWeek(lead, weekStart)).length;
   const list = byId("priority-visit-list");
   const empty = byId("priority-visit-empty");
-  byId("priority-visit-count").textContent = `${scheduled.length} jadwal`;
-  list.innerHTML = scheduled.map((lead, index) => {
+  const note = byId("priority-visit-note");
+  byId("priority-visit-count").textContent = `${scheduled.length} minggu ini`;
+  list.innerHTML = scheduled.map(({ lead, date }, index) => {
     const name = String(lead.nameUser || "").trim() || String(lead.phone || "").trim();
-    const visitDate = lead.visitDate ? formatDate(lead.visitDate) : "Tanggal belum ditentukan";
-    const late = lead.visitDate && lead.visitDate < todayLocal();
+    const visitDate = formatDate(date);
     const color = ["avatar-indigo", "avatar-green", "avatar-amber"][index % 3];
     return `<article class="priority-visit-row">
       <div class="priority-visit-person"><span class="avatar ${color}">${safeText(initials(name))}</span><div><strong>${safeText(name)}</strong><small>${safeText([lead.phone, lead.domicile].filter(Boolean).join(" · ") || "Detail lead belum lengkap")}</small></div></div>
-      <div class="priority-visit-date"><span>${late ? "Jadwal terlewat" : "Jadwal visit"}</span><strong${late ? ' class="visit-overdue"' : ""}>${safeText(visitDate)}</strong></div>
+      <div class="priority-visit-date"><span>Hari rencana visit</span><strong>${safeText(visitDate)}</strong></div>
       <button class="button button-secondary visit-action" type="button" data-follow-up="${safeText(lead.id)}">Buka lead</button>
     </article>`;
   }).join("");
   empty.classList.toggle("is-hidden", scheduled.length > 0);
+  note.classList.toggle("is-hidden", missingDayCount === 0);
+  note.textContent = missingDayCount
+    ? `${missingDayCount} lead sudah dicentang untuk visit, tetapi harinya belum disebut pada hasil FU. Tulis, misalnya, “Janji visit hari Minggu” pada hasil FU.`
+    : "";
 }
 
 function nextFollowUpNumber(lead) {
@@ -573,6 +586,25 @@ document.addEventListener("click", (event) => {
   renderFollowUpPicker();
   syncSelectedFollowUpFields();
   renderSelectedLead();
+});
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-toggle-visit]");
+  if (!button) return;
+  const lead = state.leads.find((item) => item.id === button.dataset.toggleVisit);
+  if (!lead || lead.visitAvailable === false) return;
+  button.disabled = true;
+  try {
+    await api(`/api/leads/${encodeURIComponent(lead.id)}/visit-plan`, {
+      method: "PATCH",
+      body: JSON.stringify({ visitBooked: !lead.visitBooked })
+    });
+    await loadLeads();
+    showToast(lead.visitBooked ? "Rencana visit dibatalkan." : "Rencana visit dicatat.");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message);
+  }
 });
 
 document.querySelectorAll(".close-edit-modal").forEach((button) => {
