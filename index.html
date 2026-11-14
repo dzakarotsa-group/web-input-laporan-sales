@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f6f7fb">
-    <meta name="description" content="Preview aplikasi input leads dan follow-up.">
-    <title>Lead Desk — Preview</title>
+    <meta name="description" content="Aplikasi input leads dan follow-up berbasis Google Sheets.">
+    <title>Lead Desk</title>
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/client.js"></script>
   </head>
@@ -36,7 +36,7 @@
           <span class="status-dot"></span>
           <span id="login-demo-hint"><strong>Akun demo sales</strong><br>anisa@demo.local · 123456</span>
         </div>
-        <p class="login-footnote">Preview lokal saja. Akun dan spreadsheet demo tidak menyimpan data sungguhan.</p>
+        <p class="login-footnote" id="login-footnote">Data online disimpan di Google Sheets. Hubungi admin untuk akses.</p>
       </div>
       <div class="login-decoration" aria-hidden="true">
         <div class="decoration-orbit orbit-one"></div>
@@ -88,7 +88,7 @@
         <header class="topbar">
           <div class="breadcrumbs"><span>Workspace</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Ringkasan</strong></div>
           <div class="topbar-actions">
-            <span class="preview-pill"><span class="status-dot"></span> PREVIEW</span>
+            <span class="preview-pill" id="mode-label"><span class="status-dot"></span> DEMO</span>
             <button class="icon-button" id="help-button" aria-label="Info preview" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.4 1.6c-1.1 1-2 1.4-2 3M12 17h.01"/></svg>
             </button>
@@ -108,9 +108,9 @@
             </button>
           </div>
 
-          <div class="demo-banner">
+          <div class="demo-banner is-hidden" id="sales-demo-banner">
             <span class="banner-icon" aria-hidden="true">i</span>
-            <div><strong>Ini masih preview dengan data contoh.</strong> Data tidak tersimpan ke Google Sheets dan akan ter-reset saat server dimulai ulang.</div>
+            <div><strong>Mode lokal demo.</strong> Data akun dan lead hanya sementara dan terhapus saat server dimulai ulang.</div>
             <button class="banner-close" id="dismiss-banner" aria-label="Tutup pemberitahuan" type="button">×</button>
           </div>
 
@@ -205,12 +205,12 @@
 
                 <label class="field-label spaced-label" for="follow-up-date">Tanggal follow-up <span class="required">*</span></label>
                 <input id="follow-up-date" class="input-control" type="date" required>
-                <p class="field-hint" id="late-input-hint">Isi tanggal saat follow-up dilakukan. Peringatan muncul bila dicatat setelah lewat H+1.</p>
-                <div class="late-input-alert is-hidden" id="late-input-alert" role="status">⚠ Tanggal ini sudah melewati H+1. Follow-up akan ditandai terlambat diinput.</div>
+                <p class="field-hint" id="late-input-hint">Tanggal follow-up bisa diubah untuk FU 1–8. Peringatan terlambat muncul jika pengisian lebih dari H+2.</p>
+                <div class="late-input-alert is-hidden" id="late-input-alert" role="status">⚠ Tanggal FU ini sudah lebih dari H+2. Pengisian akan ditandai terlambat.</div>
 
                 <label class="field-label spaced-label" for="follow-up-result">Hasil akhir <span class="required">*</span></label>
                 <textarea id="follow-up-result" class="input-control textarea-control" rows="5" maxlength="1000" placeholder="Tuliskan hasil follow-up secara singkat dan jelas..." required></textarea>
-                <div class="textarea-footer"><span>FU 1 otomatis tercatat saat lead masuk.</span><span id="char-count">0/1000</span></div>
+                <div class="textarea-footer"><span>Pilih FU 1–8 untuk menambah atau mengubah tanggal dan hasil.</span><span id="char-count">0/1000</span></div>
                 <div class="form-error is-hidden" id="follow-up-error" role="alert"></div>
                 <button class="button button-primary button-full form-submit" type="submit"><span>Simpan hasil follow-up</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
               </form>
@@ -231,7 +231,7 @@
           </div>
           <div class="demo-banner admin-demo-banner">
             <span class="banner-icon" aria-hidden="true">i</span>
-            <div><strong>Mode preview:</strong> akun, password dalam bentuk hash, dan link sheet hanya tersimpan di memori server. Belum menulis data ke Google Sheets.</div>
+            <div><strong>Mode lokal demo:</strong> akun dan lead hanya sementara, belum tersimpan ke Google Sheets.</div>
           </div>
           <section class="content-card admin-sales-card">
             <div class="section-heading admin-sales-heading">
@@ -240,13 +240,13 @@
             </div>
             <div class="table-scroll">
               <table class="admin-sales-table">
-                <thead><tr><th>Nama sales</th><th>Email login</th><th>Spreadsheet</th><th>Status</th><th>Akses</th></tr></thead>
+                <thead><tr><th>Nama sales</th><th>Email login</th><th>Spreadsheet sales</th><th>Status</th><th>Akses</th></tr></thead>
                 <tbody id="sales-table-body"></tbody>
               </table>
               <div class="empty-state is-hidden" id="sales-empty"><strong>Belum ada akun sales</strong><span>Daftarkan sales untuk mulai mengelola akun.</span></div>
             </div>
           </section>
-          <p class="admin-security-note">Admin diminta login ulang setiap sesi browser. Untuk penggunaan nyata, gunakan HTTPS, database, serta koneksi Google OAuth/service account yang aman.</p>
+          <p class="admin-security-note">Sesi login berakhir saat server dimulai ulang. Lindungi spreadsheet dan kredensial service account; hanya backend yang boleh mengaksesnya.</p>
         </section>
       </main>
       <nav class="mobile-nav" aria-label="Navigasi bawah">
@@ -267,9 +267,27 @@
           <label class="field-label" for="lead-source">Sumber leads<input class="input-control" id="lead-source" name="source" type="text" maxlength="100" placeholder="Contoh: Instagram"></label>
           <label class="field-label" for="lead-code">Kode leads<input class="input-control" id="lead-code" name="leadCode" type="text" maxlength="50" placeholder="Opsional"></label>
           <label class="field-label" for="lead-sales">Nama sales<input class="input-control" id="lead-sales" name="salesName" type="text" maxlength="100" value="Anisa"></label>
+          <label class="field-label" for="lead-fu1-date">Tanggal FU 1 <span class="required">*</span><input class="input-control" id="lead-fu1-date" name="followUpDate" type="date" required></label>
         </div>
+        <p class="field-hint">Pilih tanggal FU 1. Jika tanggal tersebut sudah lebih dari H+2, FU 1 akan ditandai terlambat.</p>
+        <div class="late-input-alert is-hidden" id="lead-fu1-late" role="status">⚠ Tanggal FU 1 sudah lebih dari H+2. Pengisian akan ditandai terlambat.</div>
         <div class="form-error is-hidden" id="new-lead-error" role="alert"></div>
         <div class="modal-actions"><button class="button button-secondary close-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan lead <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="edit-lead-modal">
+      <div class="modal-header"><div><p class="eyebrow">UBAH DATA</p><h2>Edit lead</h2><p class="muted">Perubahan disimpan ke spreadsheet sales.</p></div><button class="icon-button close-edit-modal" aria-label="Tutup" type="button">×</button></div>
+      <form id="edit-lead-form">
+        <div class="form-grid">
+          <label class="field-label" for="edit-lead-name">Nama user <span class="required">*</span><input class="input-control" id="edit-lead-name" type="text" maxlength="100" required></label>
+          <label class="field-label" for="edit-lead-phone">Nomor HP <span class="required">*</span><input class="input-control" id="edit-lead-phone" type="tel" maxlength="30" required></label>
+          <label class="field-label" for="edit-lead-domicile">Domisili<input class="input-control" id="edit-lead-domicile" type="text" maxlength="100"></label>
+          <label class="field-label" for="edit-lead-source">Sumber leads<input class="input-control" id="edit-lead-source" type="text" maxlength="100"></label>
+          <label class="field-label" for="edit-lead-code">Kode leads<input class="input-control" id="edit-lead-code" type="text" maxlength="50"></label>
+        </div>
+        <div class="form-error is-hidden" id="edit-lead-error" role="alert"></div>
+        <div class="modal-actions"><button class="button button-secondary close-edit-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan perubahan <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
       </form>
     </dialog>
 
@@ -282,7 +300,7 @@
           <label class="field-label" for="sales-password">Password angka <span class="required">*</span><input id="sales-password" class="input-control" type="password" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" placeholder="6–12 angka" required></label>
           <label class="field-label" for="sales-sheet">Link spreadsheet sales <span class="required">*</span><input id="sales-sheet" class="input-control" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." required></label>
         </div>
-        <p class="field-hint">Pastikan spreadsheet punya akses edit untuk integrasi yang akan disiapkan.</p>
+        <p class="field-hint">Setiap sales harus memakai spreadsheet berbeda. Bagikan akses Editor ke service account Google; format sheet yang sudah ada akan dipakai, dan tab leads dibuat hanya jika spreadsheet masih kosong.</p>
         <div class="form-error is-hidden" id="add-sales-error" role="alert"></div>
         <div class="modal-actions"><button class="button button-secondary close-sales-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan akun <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
       </form>

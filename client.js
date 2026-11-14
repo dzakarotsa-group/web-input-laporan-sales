@@ -4,7 +4,9 @@ const state = {
   user: null,
   loginRole: "sales",
   selectedFollowUp: 2,
-  activePage: "overview"
+  activePage: "overview",
+  storageMode: "demo",
+  editingLeadId: null
 };
 const FOLLOW_UP_REMINDER_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -61,7 +63,7 @@ function todayLocal() {
 }
 
 function isLateEntry(dateValue) {
-  return Boolean(dateValue) && todayLocal() > dateAfter(dateValue, 1);
+  return Boolean(dateValue) && todayLocal() > dateAfter(dateValue, 2);
 }
 
 function needsFollowUp(lead, now = Date.now()) {
@@ -98,7 +100,7 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       <td><span class="source-pill">${safeText(lead.source || "Lainnya")}</span></td>
       <td>${safeText(lastActivity(lead))}</td>
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
-      <td><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Buat follow-up untuk ${safeText(lead.nameUser)}">›</button></td>
+      <td><div class="row-actions"><button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Buat atau edit follow-up untuk ${safeText(lead.nameUser)}">›</button></div></td>
     </tr>`;
   }).join("");
   empty.classList.toggle("is-hidden", filtered.length > 0);
@@ -108,10 +110,8 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
 function renderMetrics() {
   const dueLeads = state.leads.filter((lead) => needsFollowUp(lead));
   const contacted = state.leads.filter((lead) => lead.followUps.some((item) => item.number > 1 && item.result)).length;
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
   const todayCount = state.leads.reduce((count, lead) => count + lead.followUps.filter((item) =>
-    item.number > 1 && item.createdAt && Date.parse(item.createdAt) >= startOfDay.getTime()
+    (item.followUpDate || dateInputValue(item.createdAt)) === todayLocal()
   ).length, 0);
   byId("metric-total").textContent = state.leads.length;
   byId("metric-pending").textContent = dueLeads.length;
@@ -135,10 +135,29 @@ function renderFollowUpPicker() {
   const picker = byId("fu-picker");
   picker.innerHTML = Array.from({ length: 8 }, (_, index) => {
     const number = index + 1;
-    const isInitialEntry = number === 1;
-    return `<button class="fu-option${number === state.selectedFollowUp ? " is-selected" : ""}" type="button" data-fu-number="${number}" aria-pressed="${number === state.selectedFollowUp}"${isInitialEntry ? ' disabled title="Otomatis tercatat saat lead masuk"' : ""}>FU ${number}</button>`;
+    return `<button class="fu-option${number === state.selectedFollowUp ? " is-selected" : ""}" type="button" data-fu-number="${number}" aria-pressed="${number === state.selectedFollowUp}">FU ${number}</button>`;
   }).join("");
   byId("follow-up-number").value = String(state.selectedFollowUp);
+}
+
+function dateInputValue(value) {
+  const text = String(value || "");
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function updateLateEntryAlert() {
+  byId("late-input-alert").classList.toggle("is-hidden", !isLateEntry(byId("follow-up-date").value));
+}
+
+function syncSelectedFollowUpFields() {
+  const lead = state.leads.find((item) => item.id === byId("follow-up-lead").value);
+  const item = lead?.followUps.find((followUp) => followUp.number === state.selectedFollowUp);
+  byId("follow-up-date").value = item?.followUpDate || dateInputValue(item?.createdAt) || todayLocal();
+  byId("follow-up-result").value = item?.result || "";
+  byId("char-count").textContent = `${byId("follow-up-result").value.length}/1000`;
+  updateLateEntryAlert();
 }
 
 function renderLeadOptions() {
@@ -149,6 +168,7 @@ function renderLeadOptions() {
   if (!select.value && state.leads.length) select.value = state.leads[0].id;
   state.selectedFollowUp = nextFollowUpNumber(state.leads.find((lead) => lead.id === select.value));
   renderFollowUpPicker();
+  syncSelectedFollowUpFields();
   renderSelectedLead();
 }
 
@@ -176,8 +196,8 @@ function renderSelectedLead() {
   byId("history-count").textContent = String(history.length);
   historyList.innerHTML = history.length
     ? history.map((item) => {
-      const late = item.late || (item.number > 1 && isLateEntry(item.followUpDate));
-      const dateLabel = item.number === 1 ? formatDate(item.createdAt || lead.createdAt) : formatDate(item.followUpDate || item.createdAt);
+      const late = item.late || isLateEntry(item.followUpDate);
+      const dateLabel = formatDate(item.followUpDate || item.createdAt || lead.createdAt);
       return `<article class="history-item"><span class="history-index">${item.number}</span><div class="history-content"><strong>${item.number === 1 ? "FU 1 · Lead masuk" : `Follow-up ${item.number}`}</strong><p>${safeText(item.result)}</p><small>Tanggal FU: ${safeText(dateLabel)}${late ? ' · <span class="late-history-label">Terlambat input</span>' : ""}</small></div></article>`;
     }).join("")
     : '<p class="history-empty">Belum ada follow-up tercatat.</p>';
@@ -280,7 +300,13 @@ function enterWorkspace(user) {
   byId("admin-nav").classList.toggle("is-hidden", !isAdmin);
   byId("mobile-admin-nav").classList.toggle("is-hidden", !isAdmin);
   document.querySelectorAll(".sales-only").forEach((item) => item.classList.toggle("is-hidden", isAdmin));
-  byId("sheet-status-label").textContent = isAdmin ? "Kelola per sales" : "Tersimpan · demo";
+  byId("sheet-status-label").textContent = state.storageMode === "spreadsheet"
+    ? "Tersinkron · Google Sheets"
+    : "Data demo · lokal";
+  document.querySelectorAll(".demo-banner").forEach((banner) => {
+    banner.classList.toggle("is-hidden", state.storageMode === "spreadsheet");
+  });
+  byId("mode-label").textContent = state.storageMode === "spreadsheet" ? " GOOGLE SHEETS" : " DEMO LOKAL";
   if (isAdmin) {
     showPage("admin");
     loadSalesAccounts().catch((error) => showToast(error.message));
@@ -329,7 +355,11 @@ document.querySelectorAll("[data-nav]").forEach((button) => {
 });
 
 document.querySelectorAll("[data-open-form='new-lead']").forEach((button) => {
-  button.addEventListener("click", () => byId("new-lead-modal").showModal());
+  button.addEventListener("click", () => {
+    byId("lead-fu1-date").value = todayLocal();
+    byId("lead-fu1-late").classList.add("is-hidden");
+    byId("new-lead-modal").showModal();
+  });
 });
 
 document.querySelectorAll(".close-modal").forEach((button) => {
@@ -338,6 +368,10 @@ document.querySelectorAll(".close-modal").forEach((button) => {
 
 byId("new-lead-modal").addEventListener("click", (event) => {
   if (event.target === byId("new-lead-modal")) byId("new-lead-modal").close();
+});
+
+byId("lead-fu1-date").addEventListener("input", () => {
+  byId("lead-fu1-late").classList.toggle("is-hidden", !isLateEntry(byId("lead-fu1-date").value));
 });
 
 byId("new-lead-form").addEventListener("submit", async (event) => {
@@ -351,8 +385,9 @@ byId("new-lead-form").addEventListener("submit", async (event) => {
     await loadLeads();
     form.reset();
     byId("lead-sales").value = "Anisa";
+    byId("lead-fu1-date").value = todayLocal();
     byId("new-lead-modal").close();
-    showToast("Lead baru berhasil ditambahkan ke data preview.");
+    showToast("Lead berhasil disimpan.");
   } catch (error) {
     setFormError("new-lead-error", error.message);
   }
@@ -363,20 +398,19 @@ byId("fu-picker").addEventListener("click", (event) => {
   if (!button) return;
   state.selectedFollowUp = Number(button.dataset.fuNumber);
   renderFollowUpPicker();
+  syncSelectedFollowUpFields();
 });
 
 byId("follow-up-lead").addEventListener("change", () => {
   const lead = state.leads.find((item) => item.id === byId("follow-up-lead").value);
   state.selectedFollowUp = nextFollowUpNumber(lead);
   renderFollowUpPicker();
-  byId("follow-up-date").value = todayLocal();
-  byId("late-input-alert").classList.add("is-hidden");
+  syncSelectedFollowUpFields();
   renderSelectedLead();
 });
 byId("follow-up-date").value = todayLocal();
 byId("follow-up-date").addEventListener("input", () => {
-  const late = isLateEntry(byId("follow-up-date").value);
-  byId("late-input-alert").classList.toggle("is-hidden", !late);
+  updateLateEntryAlert();
 });
 byId("follow-up-result").addEventListener("input", (event) => {
   byId("char-count").textContent = `${event.target.value.length}/1000`;
@@ -400,11 +434,7 @@ byId("follow-up-form").addEventListener("submit", async (event) => {
       })
     });
     await loadLeads();
-    byId("follow-up-result").value = "";
-    byId("char-count").textContent = "0/1000";
-    byId("follow-up-date").value = todayLocal();
-    byId("late-input-alert").classList.add("is-hidden");
-    showToast("Hasil follow-up berhasil disimpan ke data preview.");
+    showToast("Tanggal dan hasil FU berhasil disimpan.");
   } catch (error) {
     setFormError("follow-up-error", error.message);
   }
@@ -414,19 +444,62 @@ byId("lead-search").addEventListener("input", (event) => renderLeadRows("leads-t
 byId("lead-search-all").addEventListener("input", (event) => renderLeadRows("leads-table-all", event.target.value, true));
 
 document.addEventListener("click", (event) => {
+  const editAction = event.target.closest("[data-edit-lead]");
+  if (editAction) {
+    const lead = state.leads.find((item) => item.id === editAction.dataset.editLead);
+    if (!lead) return;
+    state.editingLeadId = lead.id;
+    byId("edit-lead-name").value = lead.nameUser;
+    byId("edit-lead-phone").value = lead.phone;
+    byId("edit-lead-domicile").value = lead.domicile || "";
+    byId("edit-lead-source").value = lead.source || "";
+    byId("edit-lead-code").value = lead.leadCode || "";
+    setFormError("edit-lead-error", "");
+    byId("edit-lead-modal").showModal();
+    return;
+  }
   const action = event.target.closest("[data-follow-up]");
   if (!action) return;
   showPage("follow-up");
   byId("follow-up-lead").value = action.dataset.followUp;
   state.selectedFollowUp = nextFollowUpNumber(state.leads.find((lead) => lead.id === action.dataset.followUp));
   renderFollowUpPicker();
-  byId("follow-up-date").value = todayLocal();
-  byId("late-input-alert").classList.add("is-hidden");
+  syncSelectedFollowUpFields();
   renderSelectedLead();
 });
 
+document.querySelectorAll(".close-edit-modal").forEach((button) => {
+  button.addEventListener("click", () => byId("edit-lead-modal").close());
+});
+byId("edit-lead-modal").addEventListener("click", (event) => {
+  if (event.target === byId("edit-lead-modal")) byId("edit-lead-modal").close();
+});
+byId("edit-lead-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setFormError("edit-lead-error", "");
+  try {
+    await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        nameUser: byId("edit-lead-name").value,
+        phone: byId("edit-lead-phone").value,
+        domicile: byId("edit-lead-domicile").value,
+        source: byId("edit-lead-source").value,
+        leadCode: byId("edit-lead-code").value
+      })
+    });
+    await loadLeads();
+    byId("edit-lead-modal").close();
+    showToast("Data lead berhasil diperbarui.");
+  } catch (error) {
+    setFormError("edit-lead-error", error.message);
+  }
+});
+
 byId("dismiss-banner").addEventListener("click", () => byId("dismiss-banner").parentElement.remove());
-byId("help-button").addEventListener("click", () => showToast("Preview ini memakai API lokal dan belum tersambung ke spreadsheet."));
+byId("help-button").addEventListener("click", () => showToast(state.storageMode === "spreadsheet"
+  ? "Akun dan data leads tersimpan di Google Sheets."
+  : "Mode demo hanya tersedia secara lokal; hubungkan Google Sheets untuk menyimpan data online."));
 byId("logout-button").addEventListener("click", async () => {
   let logoutError = "";
   try {
@@ -466,7 +539,7 @@ byId("add-sales-form").addEventListener("submit", async (event) => {
     await loadSalesAccounts();
     form.reset();
     byId("add-sales-modal").close();
-    showToast("Akun sales berhasil dibuat di data preview.");
+    showToast("Akun sales berhasil dibuat.");
   } catch (error) {
     setFormError("add-sales-error", error.message);
   }
@@ -488,8 +561,14 @@ byId("sales-table-body").addEventListener("click", async (event) => {
 });
 
 api("/api/health").then(({ mode }) => {
-  if (mode === "supabase") {
-    byId("login-demo-hint").innerHTML = "<strong>Login admin dikonfigurasi di backend</strong><br>Masukkan email dan password admin dari environment server.";
+  state.storageMode = mode;
+  if (mode === "spreadsheet") {
+    byId("login-demo-hint").innerHTML = "<strong>Masuk dengan akun terdaftar</strong><br>Akun sales dibuat oleh admin.";
+    byId("login-footnote").textContent = "Data akun, leads, dan follow-up tersimpan di Google Sheets.";
+    byId("login-email").value = "";
+    byId("login-password").value = "";
+  } else {
+    byId("login-footnote").textContent = "Mode demo lokal. Data akan terhapus saat server dimulai ulang.";
   }
 }).catch((error) => {
   setFormError("login-error", error.message);

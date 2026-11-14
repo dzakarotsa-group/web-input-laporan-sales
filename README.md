@@ -1,49 +1,40 @@
-# Lead Desk Web Preview
+# Lead Desk
 
-Responsive web preview for adding leads and recording follow-up notes. A new lead is automatically logged as FU 1 when it is added. A reminder appears only when more than 3 days have passed since its latest recorded FU; FU 2–8 are used for subsequent manual follow-ups. Sales choose the date the FU happened; an entry is marked late after H+1 has passed.
+Lead Desk stores the sales account registry in a private Google Spreadsheet and stores each salesperson's leads and follow-up history in that salesperson's own Google Spreadsheet. The backend detects an existing lead table from its column headers and reads or appends to that table in place; it does not replace existing rows or create a duplicate `leads` tab. A new, empty sales spreadsheet gets a `leads` tab automatically. Login sessions use signed cookies so they work across Vercel Function instances.
 
-The preview includes a session login, a demo admin panel for adding/deactivating sales accounts and recording each sales spreadsheet link, and sales login with a numeric password. Demo credentials:
+## Connect Google Sheets
 
-- Admin: `admin@demo.local` / `246810`
-- Sales: `anisa@demo.local` / `123456`
+1. Create a Google Cloud service account and enable the Google Sheets API.
+2. Create a private account-registry spreadsheet. Set `GOOGLE_SHEETS_SPREADSHEET_ID` to its ID (the part between `/d/` and `/edit` in its URL).
+3. Share the account-registry spreadsheet with the service account's `client_email` as **Editor**.
+4. Copy `.env.example` to `.env`. Put the service-account JSON in `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` as a Base64-encoded string. Keep this secret on the server only; never put it in `client.js`, a public environment variable, or source control.
+5. Generate a random `SESSION_SECRET` of at least 32 bytes with `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. This signs login cookies so sessions work across Vercel Function instances.
+6. Set a private `ADMIN_EMAIL` and a 6–12 digit `ADMIN_PASSWORD`, then run `npm start`.
+7. Open `/api/health`. A successful connection reports `"mode":"spreadsheet"` and `"connectedToSpreadsheet":true`.
+8. Log in as admin and register each salesperson with their own spreadsheet URL. Share every sales spreadsheet with the service account as **Editor**. Do not share the private account-registry spreadsheet with sales staff.
+9. Existing sales sheets are recognized by headers such as `Nama User`, `Nomor HP`, and `FU 1`–`FU 8`. Keep the current headers and data in place; the app reads previous rows and appends new leads there.
 
-Demo account passwords are salted and hashed. In demo mode, sales accounts and lead data are temporary and reset when the server restarts. The spreadsheet URL is saved as demo metadata only; this project does not authenticate with Google or write to a spreadsheet.
+Sales can edit existing or newly added lead details. FU 1's date is entered when a lead is created; sales can then enter or update the date for FU 1–8 from the follow-up page. The app marks an entry late only when the current date in Jakarta is more than two days after the FU date (past H+2). Existing sheets keep their current columns and data.
 
-## Use Supabase Free for persistent data
+For Vercel, import the GitHub repository and add these five variables (`GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `SESSION_SECRET`) as server-side environment variables for Production, then redeploy. Production refuses to start without Google Sheets and a strong session secret configured. The older `SUPABASE_*` variables are no longer used.
 
-The server can persist sales accounts and leads in a Supabase Postgres project while keeping the Supabase service-role key on the server:
+## Move existing Supabase data
 
-1. Create a Supabase Free project.
-2. In **SQL Editor**, run [`supabase-schema.sql`](./supabase-schema.sql).
-3. Copy `.env.example` to `.env`. Fill in `SUPABASE_URL`, the server-only `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
-4. Restart with `npm start`. The login hint will indicate that admin credentials are configured by the server.
+The app does not delete or automatically copy data from the old Supabase project. If leads are already in each salesperson's spreadsheet, keep those sheets and only migrate their sales accounts so the existing `spreadsheet_url` links remain attached. The app will read and continue using those leads in place. If leads exist only in Supabase:
 
-Keep the Supabase service-role key private; never add it to frontend JavaScript, GitHub, or a public deployment variable. Use it only as a secret environment variable on the Node.js backend. The database tables have RLS enabled and no client-access policies; only the backend service-role client should access them. Sales passwords are stored as salted scrypt hashes.
+1. Create each salesperson's own Google Spreadsheet and share it with the service account.
+2. Export the `sales_accounts` and `leads` tables from Supabase as CSV files, including column headers.
+3. Import `sales_accounts` into the private account-registry spreadsheet's `sales_accounts` tab. Keep each row's existing `spreadsheet_url`, password salt/hash, and account ID unchanged.
+4. For each salesperson, filter the exported `leads` CSV by `owner_id`, then import those rows into that salesperson's spreadsheet under a `leads` tab. Preserve the column order and the `follow_ups` JSON values.
+5. Deploy with the spreadsheet variables above and verify each sales account sees their own previous leads and can save a follow-up before removing the old Supabase project.
 
-When both Supabase variables are configured, demo seed sales/leads are not used; create sales accounts after logging in as the configured admin. When Supabase is not configured, the existing in-memory demo mode remains available.
+The backend creates these headers automatically when the tabs are empty:
 
-The app's current login sessions remain in memory and will need to log in again after a backend restart. The free Supabase plan can pause projects after inactivity and has plan-specific limits. Google Sheets writing is still not implemented; this setup only persists app data and spreadsheet links.
+- `sales_accounts`: `id`, `name`, `email`, `password_salt`, `password_hash`, `spreadsheet_url`, `is_active`, `created_at`
+- `leads`: `id`, `name_user`, `phone`, `owner_id`, `sales_name`, `domicile`, `source`, `lead_code`, `created_at`, `final_result`, `follow_ups`
 
-## Deploy to Vercel
+## Local demo
 
-Vercel uses the default request handler exported by `server.mjs` for the app. Local development continues to use `npm start`.
+With no Google Sheets variables set, `npm start` runs a local demo using temporary sample data. This mode is not persistent and must not be used for real or online data. Install Node.js 22 or newer and open `http://127.0.0.1:4173`.
 
-1. Import this GitHub repository into Vercel.
-2. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` under the project's **Environment Variables**. Use a server-only Supabase secret/service-role key, not a publishable key, and do not add a `NEXT_PUBLIC_` prefix.
-3. Deploy, then open `/api/health` on the deployment URL. A successful response reports `"mode":"supabase"`.
-
-Do not deploy with demo credentials or enter real customer information; the app's custom authentication and in-memory sessions are for preview use, and sessions are lost when the server restarts.
-
-## Run locally
-
-1. Install Node.js 22 or newer.
-2. From this folder, run `npm start`.
-3. Open `http://127.0.0.1:4173` and choose the **Sales** or **Admin** role.
-
-The preview API is bound to `127.0.0.1` and uses an in-memory session/account store, not production-grade persistence or deployment security. Do not deploy it publicly or enter real customer information.
-
-## Spreadsheet integration
-
-The supplied CSV has 26 columns, including duplicate placeholder headers (`Column 1` appears twice) and 2,089 exported rows, many of which have no lead name. The preview uses only the lead fields and follow-up notes; it does not import these rows.
-
-Before connecting real spreadsheets, the header row needs a clean, unique schema, each sheet must grant edit access through an authorized Google account/service, and the backend needs durable storage and a production authentication setup. Never put passwords, service-account keys, or OAuth client secrets in frontend files.
+The app hashes sales passwords before storing them. Google service-account credentials stay on the backend. Keep the account-registry spreadsheet private because it contains password hashes; each sales spreadsheet can be shared only with its owner and the service account. Login cookies are signed and expire after eight hours.
