@@ -91,7 +91,9 @@ function lastActivity(lead) {
 }
 
 function displayableLeads() {
-  return state.leads.filter((lead) => String(lead.nameUser || "").trim());
+  return state.leads.filter((lead) =>
+    String(lead.nameUser || "").trim() && String(lead.phone || "").trim()
+  );
 }
 
 function isFollowedUp(lead) {

@@ -600,16 +600,24 @@ async function setSalesAccountActive(id, isActive) {
 }
 
 async function listSalesLeads(ownerId) {
-  if (!sheetsEnabled) return leads.filter((lead) => lead.ownerId === ownerId);
+  if (!sheetsEnabled) {
+    return leads.filter((lead) => lead.ownerId === ownerId &&
+      String(lead.nameUser || "").trim() && String(lead.phone || "").trim());
+  }
   const account = await findSalesAccountById(ownerId);
   if (!account) return [];
   const ownerSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
   const table = await findLeadTable(ownerSpreadsheetId);
   const range = `${quoteSheetTitle(table.title)}!A${table.headerRow + 1}:AZ`;
   const { values = [] } = await sheetsRequest(`values/${encodeURIComponent(range)}`, {}, ownerSpreadsheetId);
-  return values.map((row, index) => leadFromSpreadsheetRow(
-    row, table.headerRow + index + 1, table, ownerId, account.name
-  )).filter((lead) => lead.nameUser.trim() || lead.phone.trim())
+  return values.map((row, index) => ({ row, rowNumber: table.headerRow + index + 1 }))
+    .filter(({ row }) =>
+      String(row[table.columns.nameUser] || "").trim() &&
+      String(row[table.columns.phone] || "").trim()
+    )
+    .map(({ row, rowNumber }) => leadFromSpreadsheetRow(
+      row, rowNumber, table, ownerId, account.name
+    ))
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
