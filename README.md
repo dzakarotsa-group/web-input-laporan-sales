@@ -16,6 +16,8 @@ Lead Desk stores the sales account registry in a private Google Spreadsheet and 
 
 Sales can edit existing or newly added lead details. FU 1's date is entered when a lead is created; sales can then enter or update the date for FU 1–8 from the follow-up page. The app marks an entry late only when the current date in Jakarta is more than two days after the FU date (past H+2). Existing sheets keep their current columns and data.
 
+The overview metric cards are clickable filters for this month's leads, leads needing follow-up, followed-up leads, and today's follow-ups. The overview shows only the five newest non-empty leads. A visit-priority list reads `Booking Visit?`, `Sudah Terlaksana?`, and `Tanggal Visit` from compatible existing sales sheets, showing booked visits that have not been marked completed.
+
 For Vercel, import the GitHub repository and add these five variables (`GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `SESSION_SECRET`) as server-side environment variables for Production, then redeploy. Production refuses to start without Google Sheets and a strong session secret configured. The older `SUPABASE_*` variables are no longer used.
 
 ## Move existing Supabase data

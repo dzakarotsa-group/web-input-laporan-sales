@@ -346,6 +346,9 @@ const leadHeaderAliases = {
   domicile: ["domisili", "kota", "domicile"],
   source: ["sumberlead", "sumberleads", "sumber", "source"],
   leadCode: ["kodelead", "kodeleads", "leadcode"],
+  visitBooked: ["bookingvisit", "bookedvisit", "visitbooked"],
+  visitCompleted: ["sudahterlaksana", "visitdone", "visitcompleted"],
+  visitDate: ["tanggalvisit", "visitdate", "jadwalvisit"],
   createdAt: ["tanggal", "tanggallead", "tanggalmasuk", "createdat", "date", "column1"],
   finalResult: ["hasilakhir", "hasilfollowup", "hasilfu", "finalresult"],
   previousResult: ["hasilsebelumnya", "hasilsebelum", "previousresult"],
@@ -429,6 +432,13 @@ function spreadsheetDate(value) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
 }
 
+function spreadsheetFlag(value) {
+  const text = String(value || "").trim();
+  return ["✓", "✔", "☑"].includes(text) ||
+    ["true", "1", "yes", "ya", "mau", "booking", "booked", "sudah", "terlaksana", "selesai", "done", "completed"]
+      .includes(normalizeHeader(text));
+}
+
 function spreadsheetDateValue(date) {
   const [year, month, day] = date.split("-").map(Number);
   return Date.UTC(year, month - 1, day) / 86400_000 + 25569;
@@ -492,6 +502,9 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
     domicile: String(get(schema.columns.domicile)),
     source: String(get(schema.columns.source)),
     leadCode: String(get(schema.columns.leadCode)),
+    visitBooked: spreadsheetFlag(get(schema.columns.visitBooked)) || Boolean(spreadsheetDate(get(schema.columns.visitDate))),
+    visitCompleted: spreadsheetFlag(get(schema.columns.visitCompleted)),
+    visitDate: spreadsheetDate(get(schema.columns.visitDate)),
     createdAt: createdDate ? `${createdDate}T00:00:00.000Z` : new Date().toISOString(),
     finalResult,
     followUps
@@ -578,7 +591,7 @@ async function listSalesLeads(ownerId) {
   const { values = [] } = await sheetsRequest(`values/${encodeURIComponent(range)}`, {}, ownerSpreadsheetId);
   return values.map((row, index) => leadFromSpreadsheetRow(
     row, table.headerRow + index + 1, table, ownerId, account.name
-  )).filter((lead) => lead.nameUser || lead.phone)
+  )).filter((lead) => lead.nameUser.trim() || lead.phone.trim())
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 

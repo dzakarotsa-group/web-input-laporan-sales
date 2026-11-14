@@ -5,10 +5,17 @@ const state = {
   loginRole: "sales",
   selectedFollowUp: 2,
   activePage: "overview",
+  leadFilter: "all",
   storageMode: "demo",
   editingLeadId: null
 };
 const FOLLOW_UP_REMINDER_MS = 3 * 24 * 60 * 60 * 1000;
+const leadFilterLabels = {
+  month: "Leads bulan ini",
+  due: "Perlu follow-up",
+  contacted: "Leads di-follow-up",
+  today: "FU hari ini"
+};
 
 const byId = (id) => document.getElementById(id);
 const safeText = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -81,10 +88,52 @@ function lastActivity(lead) {
   return item ? `FU ${item.number}` : "FU 1";
 }
 
+function displayableLeads() {
+  return state.leads.filter((lead) => String(lead.nameUser || "").trim() || String(lead.phone || "").trim());
+}
+
+function isFollowedUp(lead) {
+  return lead.followUps.some((item) => item.number > 1 && item.result);
+}
+
+function hasFollowUpToday(lead) {
+  return lead.followUps.some((item) =>
+    (item.followUpDate || dateInputValue(item.createdAt)) === todayLocal()
+  );
+}
+
+function matchesLeadFilter(lead) {
+  switch (state.leadFilter) {
+    case "month":
+      return dateInputValue(lead.createdAt).startsWith(todayLocal().slice(0, 7));
+    case "due":
+      return needsFollowUp(lead);
+    case "contacted":
+      return isFollowedUp(lead);
+    case "today":
+      return hasFollowUpToday(lead);
+    default:
+      return true;
+  }
+}
+
+function updateLeadFilterSummary() {
+  const active = state.leadFilter !== "all";
+  byId("lead-filter-tools").classList.toggle("is-hidden", !active);
+  byId("lead-filter-label").textContent = active ? leadFilterLabels[state.leadFilter] : "";
+}
+
 function renderLeadRows(targetId, query = "", includePhone = false) {
   const body = byId(targetId);
   const normalizedQuery = query.trim().toLocaleLowerCase("id");
-  const filtered = state.leads.filter((lead) =>
+  const isOverview = targetId === "leads-table-body";
+  const sortedLeads = displayableLeads().sort((left, right) =>
+    Date.parse(right.createdAt) - Date.parse(left.createdAt)
+  );
+  const pageLeads = isOverview
+    ? sortedLeads.slice(0, 5)
+    : sortedLeads.filter(matchesLeadFilter);
+  const filtered = pageLeads.filter((lead) =>
     `${lead.nameUser} ${lead.phone} ${lead.domicile}`.toLocaleLowerCase("id").includes(normalizedQuery)
   );
   const empty = byId(targetId === "leads-table-body" ? "empty-state" : "empty-state-all");
@@ -93,8 +142,12 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
   body.innerHTML = filtered.map((lead, index) => {
     const colors = ["avatar-indigo", "avatar-green", "avatar-amber"];
     const columns = includePhone ? `<td>${safeText(lead.phone)}</td>` : "";
+    const displayName = String(lead.nameUser || "").trim() || String(lead.phone || "").trim();
+    const secondary = lead.nameUser
+      ? lead.leadCode || lead.phone || "Lead baru"
+      : "Nama belum diisi";
     return `<tr>
-      <td><div class="user-cell"><span class="avatar ${colors[index % colors.length]}">${safeText(initials(lead.nameUser))}</span><span class="user-info"><strong>${safeText(lead.nameUser)}</strong><small>${safeText(lead.leadCode || "Lead baru")}</small></span></div></td>
+      <td><div class="user-cell"><span class="avatar ${colors[index % colors.length]}">${safeText(initials(displayName))}</span><span class="user-info"><strong>${safeText(displayName)}</strong><small>${safeText(secondary)}</small></span></div></td>
       ${columns}
       <td>${safeText(lead.domicile || "—")}</td>
       <td><span class="source-pill">${safeText(lead.source || "Lainnya")}</span></td>
@@ -104,23 +157,53 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
     </tr>`;
   }).join("");
   empty.classList.toggle("is-hidden", filtered.length > 0);
-  count.textContent = `${filtered.length} lead${filtered.length === 1 ? "" : "s"}`;
+  count.textContent = isOverview
+    ? `${filtered.length} lead${filtered.length === 1 ? "" : "s"} terbaru`
+    : `${filtered.length} lead${filtered.length === 1 ? "" : "s"}`;
+  if (!isOverview) updateLeadFilterSummary();
 }
 
 function renderMetrics() {
-  const dueLeads = state.leads.filter((lead) => needsFollowUp(lead));
-  const contacted = state.leads.filter((lead) => lead.followUps.some((item) => item.number > 1 && item.result)).length;
-  const todayCount = state.leads.reduce((count, lead) => count + lead.followUps.filter((item) =>
-    (item.followUpDate || dateInputValue(item.createdAt)) === todayLocal()
-  ).length, 0);
-  byId("metric-total").textContent = state.leads.length;
+  const leads = displayableLeads();
+  const dueLeads = leads.filter((lead) => needsFollowUp(lead));
+  const contacted = leads.filter(isFollowedUp).length;
+  const todayCount = leads.filter(hasFollowUpToday).length;
+  const currentMonth = todayLocal().slice(0, 7);
+  byId("metric-total").textContent = leads.filter((lead) =>
+    dateInputValue(lead.createdAt).startsWith(currentMonth)
+  ).length;
   byId("metric-pending").textContent = dueLeads.length;
   byId("metric-contacted").textContent = contacted;
   byId("metric-today").textContent = todayCount;
-  byId("nav-count").textContent = state.leads.length;
+  byId("nav-count").textContent = leads.length;
   const alert = byId("follow-up-alert");
   alert.classList.toggle("is-hidden", dueLeads.length === 0);
   byId("follow-up-alert-message").textContent = `${dueLeads.length} lead sudah lebih dari 3 hari tanpa FU terbaru.`;
+}
+
+function renderPriorityVisits() {
+  const scheduled = displayableLeads()
+    .filter((lead) => (lead.visitBooked || lead.visitDate) && !lead.visitCompleted)
+    .sort((left, right) => {
+      const leftDate = left.visitDate || "9999-12-31";
+      const rightDate = right.visitDate || "9999-12-31";
+      return leftDate.localeCompare(rightDate);
+    });
+  const list = byId("priority-visit-list");
+  const empty = byId("priority-visit-empty");
+  byId("priority-visit-count").textContent = `${scheduled.length} jadwal`;
+  list.innerHTML = scheduled.map((lead, index) => {
+    const name = String(lead.nameUser || "").trim() || String(lead.phone || "").trim();
+    const visitDate = lead.visitDate ? formatDate(lead.visitDate) : "Tanggal belum ditentukan";
+    const late = lead.visitDate && lead.visitDate < todayLocal();
+    const color = ["avatar-indigo", "avatar-green", "avatar-amber"][index % 3];
+    return `<article class="priority-visit-row">
+      <div class="priority-visit-person"><span class="avatar ${color}">${safeText(initials(name))}</span><div><strong>${safeText(name)}</strong><small>${safeText([lead.phone, lead.domicile].filter(Boolean).join(" · ") || "Detail lead belum lengkap")}</small></div></div>
+      <div class="priority-visit-date"><span>${late ? "Jadwal terlewat" : "Jadwal visit"}</span><strong${late ? ' class="visit-overdue"' : ""}>${safeText(visitDate)}</strong></div>
+      <button class="button button-secondary visit-action" type="button" data-follow-up="${safeText(lead.id)}">Buka lead</button>
+    </article>`;
+  }).join("");
+  empty.classList.toggle("is-hidden", scheduled.length > 0);
 }
 
 function nextFollowUpNumber(lead) {
@@ -163,10 +246,11 @@ function syncSelectedFollowUpFields() {
 function renderLeadOptions() {
   const select = byId("follow-up-lead");
   const currentId = select.value;
-  select.innerHTML = `<option value="">Pilih nama user</option>${state.leads.map((lead) => `<option value="${safeText(lead.id)}">${safeText(lead.nameUser)} · ${safeText(lead.phone)} · ${safeText(lead.domicile || "Domisili belum diisi")}</option>`).join("")}`;
-  if (state.leads.some((lead) => lead.id === currentId)) select.value = currentId;
-  if (!select.value && state.leads.length) select.value = state.leads[0].id;
-  state.selectedFollowUp = nextFollowUpNumber(state.leads.find((lead) => lead.id === select.value));
+  const leads = displayableLeads();
+  select.innerHTML = `<option value="">Pilih nama user</option>${leads.map((lead) => `<option value="${safeText(lead.id)}">${safeText(lead.nameUser || lead.phone)} · ${safeText(lead.phone)} · ${safeText(lead.domicile || "Domisili belum diisi")}</option>`).join("")}`;
+  if (leads.some((lead) => lead.id === currentId)) select.value = currentId;
+  if (!select.value && leads.length) select.value = leads[0].id;
+  state.selectedFollowUp = nextFollowUpNumber(leads.find((lead) => lead.id === select.value));
   renderFollowUpPicker();
   syncSelectedFollowUpFields();
   renderSelectedLead();
@@ -222,6 +306,7 @@ function formatDate(value) {
 
 function render() {
   renderMetrics();
+  renderPriorityVisits();
   renderLeadRows("leads-table-body", byId("lead-search").value);
   renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
   renderLeadOptions();
@@ -350,8 +435,30 @@ byId("login-form").addEventListener("submit", async (event) => {
   }
 });
 
+document.querySelectorAll("[data-lead-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.leadFilter = button.dataset.leadFilter;
+    byId("lead-search-all").value = "";
+    showPage("leads");
+    renderLeadRows("leads-table-all", "", true);
+  });
+});
+
+byId("clear-lead-filter").addEventListener("click", () => {
+  state.leadFilter = "all";
+  byId("lead-search-all").value = "";
+  renderLeadRows("leads-table-all", "", true);
+});
+
 document.querySelectorAll("[data-nav]").forEach((button) => {
-  button.addEventListener("click", () => showPage(button.dataset.nav));
+  button.addEventListener("click", () => {
+    if (button.dataset.nav === "leads") {
+      state.leadFilter = "all";
+      byId("lead-search-all").value = "";
+      renderLeadRows("leads-table-all", "", true);
+    }
+    showPage(button.dataset.nav);
+  });
 });
 
 document.querySelectorAll("[data-open-form='new-lead']").forEach((button) => {

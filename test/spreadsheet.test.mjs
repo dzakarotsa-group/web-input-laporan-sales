@@ -48,6 +48,8 @@ test("existing sales sheet data is continued in place and kept separate per sale
   previousLead[6] = "LD-LAMA";
   previousLead[7] = "01/06/2026";
   previousLead[8] = "02/06/2026";
+  previousLead[15] = "TRUE";
+  previousLead[17] = dateOffset(1);
   previousLead[20] = "Pernah dihubungi";
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
@@ -187,6 +189,9 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(result.data.leads.length, 1);
     assert.equal(result.data.leads[0].nameUser, "Lead Sebelumnya");
     assert.equal(result.data.leads[0].followUps[1].result, "Pernah dihubungi");
+    assert.equal(result.data.leads[0].visitBooked, true);
+    assert.equal(result.data.leads[0].visitDate, dateOffset(1));
+    assert.equal(result.data.leads[0].visitCompleted, false);
 
     result = await request(app.base, `/api/leads/${oldLeadId}`, {
       method: "PATCH",

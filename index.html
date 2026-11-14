@@ -115,26 +115,26 @@
           </div>
 
           <div class="metrics-grid">
-            <article class="metric-card">
-              <div class="metric-top"><span>Total leads</span><span class="metric-icon icon-blue"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8M18 14a5 5 0 0 1 3 4.6V20"/></svg></span></div>
+            <button class="metric-card" type="button" data-lead-filter="month" aria-label="Lihat leads bulan ini">
+              <div class="metric-top"><span>Leads bulan ini</span><span class="metric-icon icon-blue"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8M18 14a5 5 0 0 1 3 4.6V20"/></svg></span></div>
               <div class="metric-number" id="metric-total">3</div>
-              <div class="metric-foot"><span class="metric-neutral">Semua data lead</span></div>
-            </article>
-            <article class="metric-card">
+              <div class="metric-foot"><span class="metric-neutral">Lead masuk bulan ini</span></div>
+            </button>
+            <button class="metric-card" type="button" data-lead-filter="due" aria-label="Lihat leads yang perlu follow-up">
               <div class="metric-top"><span>Perlu follow-up</span><span class="metric-icon icon-amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
               <div class="metric-number" id="metric-pending">2</div>
               <div class="metric-foot"><span class="metric-tag tag-amber">Terlambat &gt; 3 hari</span></div>
-            </article>
-            <article class="metric-card">
+            </button>
+            <button class="metric-card" type="button" data-lead-filter="contacted" aria-label="Lihat leads yang sudah di-follow-up">
               <div class="metric-top"><span>Leads di-follow-up</span><span class="metric-icon icon-green"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span></div>
               <div class="metric-number" id="metric-contacted">1</div>
               <div class="metric-foot"><span class="metric-tag tag-green">FU setelah lead masuk</span></div>
-            </article>
-            <article class="metric-card">
+            </button>
+            <button class="metric-card" type="button" data-lead-filter="today" aria-label="Lihat follow-up hari ini">
               <div class="metric-top"><span>FU hari ini</span><span class="metric-icon icon-purple"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span></div>
               <div class="metric-number" id="metric-today">0</div>
               <div class="metric-foot"><span class="metric-neutral">Catatan terbaru</span></div>
-            </article>
+            </button>
           </div>
 
           <div class="follow-up-alert is-hidden" id="follow-up-alert" role="status">
@@ -143,9 +143,21 @@
             <button type="button" class="button button-alert" data-nav="leads">Lihat leads <span aria-hidden="true">→</span></button>
           </div>
 
+          <section class="content-card priority-visits-card">
+            <div class="section-heading">
+              <div><h2>Prioritas visit</h2><p class="muted">Lead yang sudah booking visit dan jadwalnya.</p></div>
+              <span class="table-count" id="priority-visit-count">0 jadwal</span>
+            </div>
+            <div class="priority-visit-list" id="priority-visit-list"></div>
+            <div class="empty-state is-hidden" id="priority-visit-empty">
+              <strong>Belum ada jadwal visit</strong>
+              <span>Jadwal dari kolom Booking Visit? dan Tanggal Visit akan muncul di sini.</span>
+            </div>
+          </section>
+
           <section class="content-card leads-card">
             <div class="section-heading">
-              <div><h2>Leads terbaru</h2><p class="muted">Daftar lead yang sedang kamu kelola.</p></div>
+              <div><h2>Leads terbaru</h2><p class="muted">Menampilkan maksimal 5 lead terbaru.</p></div>
               <button class="button button-secondary" data-nav="leads" type="button">Lihat semua <span aria-hidden="true">→</span></button>
             </div>
             <div class="table-toolbar">
@@ -162,8 +174,8 @@
               </table>
               <div class="empty-state is-hidden" id="empty-state">
                 <span class="empty-icon">⌕</span>
-                <strong>Lead tidak ditemukan</strong>
-                <span>Coba kata kunci lain.</span>
+                <strong>Belum ada lead terbaru</strong>
+                <span>Lead dengan nama atau nomor HP akan ditampilkan di sini.</span>
               </div>
             </div>
           </section>
@@ -178,6 +190,7 @@
           <section class="content-card">
             <div class="table-toolbar page-table-toolbar">
               <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg><input id="lead-search-all" type="search" placeholder="Cari nama atau nomor HP" autocomplete="off"></label>
+              <div class="lead-filter-tools is-hidden" id="lead-filter-tools"><span id="lead-filter-label"></span><button id="clear-lead-filter" type="button">Tampilkan semua</button></div>
               <span class="table-count" id="table-count-all">3 leads</span>
             </div>
             <div class="table-scroll">

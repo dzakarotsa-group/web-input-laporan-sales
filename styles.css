@@ -110,7 +110,9 @@ button { cursor: pointer; }
 .banner-icon { width: 17px; height: 17px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #6a6de7; background: #e9eaff; font: 700 11px Georgia, serif; }
 .banner-close { margin-left: auto; align-self: flex-start; border: 0; color: #a6a8c3; background: transparent; font-size: 19px; line-height: 1; }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
-.metric-card { min-height: 122px; padding: 16px 17px 13px; border: 1px solid var(--line); border-radius: 11px; background: white; box-shadow: 0 2px 7px rgba(35, 44, 75, .02); }
+.metric-card { width: 100%; min-height: 122px; display: block; padding: 16px 17px 13px; border: 1px solid var(--line); border-radius: 11px; color: inherit; background: white; box-shadow: 0 2px 7px rgba(35, 44, 75, .02); text-align: left; cursor: pointer; transition: border-color .16s, box-shadow .16s, transform .16s; }
+.metric-card:hover { border-color: #d7d8f6; box-shadow: 0 8px 18px rgba(35, 44, 75, .06); transform: translateY(-2px); }
+.metric-card:focus-visible { outline: 3px solid rgba(84, 87, 232, .24); outline-offset: 2px; }
 .metric-top { display: flex; align-items: center; justify-content: space-between; color: #838b9a; font-size: 11px; font-weight: 600; }
 .metric-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 8px; }
 .metric-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -160,6 +162,21 @@ tbody tr:last-child td { border-bottom: 0; }
 .follow-up-alert span:not(.alert-icon) { color: #a78554; font-size: 10px; }
 .button-alert { min-height: 31px; padding: 0 9px; border-color: #f0dfc3; color: #91621e; background: #fff; font-size: 9px; }
 .button-alert:hover { background: #fff6e7; }
+.priority-visits-card { padding: 19px 20px 10px; margin-bottom: 19px; }
+.priority-visit-list { display: grid; margin-top: 12px; }
+.priority-visit-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(150px, .75fr) auto; align-items: center; gap: 14px; padding: 12px 3px; border-top: 1px solid #f0f1f5; }
+.priority-visit-person { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.priority-visit-person strong, .priority-visit-person small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.priority-visit-person strong { color: #363d4d; font-size: 11px; }
+.priority-visit-person small { margin-top: 4px; color: #9299a8; font-size: 9px; }
+.priority-visit-date span, .priority-visit-date strong { display: block; }
+.priority-visit-date span { color: #9aa1ae; font-size: 9px; }
+.priority-visit-date strong { margin-top: 4px; color: #545c6c; font-size: 10px; }
+.priority-visit-date .visit-overdue { color: #b46c19; }
+.visit-action { min-height: 30px; padding: 0 10px; font-size: 9px; }
+.lead-filter-tools { display: flex; align-items: center; gap: 8px; color: #686ade; font-size: 9px; }
+.lead-filter-tools button { padding: 4px 7px; border: 1px solid #e6e7f2; border-radius: 6px; color: #5b5ed7; background: white; font-size: 9px; font-weight: 600; }
+.lead-filter-tools button:hover { background: #f7f7ff; }
 .row-actions { display: flex; align-items: center; gap: 2px; }
 .row-action { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; color: #8e95a3; background: transparent; font-size: 16px; }
 .row-action:hover { border-color: #e6e7f2; color: var(--primary); background: #f7f7ff; }
@@ -260,6 +277,10 @@ select.input-control { appearance: auto; }
   .demo-banner { align-items: flex-start; font-size: 10px; }
   .follow-up-alert { align-items: flex-start; }
   .follow-up-alert .button { align-self: center; flex: 0 0 auto; }
+  .priority-visits-card { padding: 16px 13px 8px; }
+  .priority-visit-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .priority-visit-date { grid-column: 1; padding-left: 39px; }
+  .visit-action { grid-column: 2; grid-row: 1 / span 2; }
   .demo-banner .banner-icon { margin-top: 1px; }
   .metrics-grid { gap: 9px; }
   .metric-card { min-height: 109px; padding: 12px; }
