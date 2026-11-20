@@ -162,6 +162,15 @@ tbody tr:last-child td { border-bottom: 0; }
 .follow-up-alert span:not(.alert-icon) { color: #a78554; font-size: 10px; }
 .button-alert { min-height: 31px; padding: 0 9px; border-color: #f0dfc3; color: #91621e; background: #fff; font-size: 9px; }
 .button-alert:hover { background: #fff6e7; }
+.late-leads-card { padding: 19px 20px 10px; margin-bottom: 19px; }
+.late-lead-list { display: grid; margin-top: 12px; }
+.late-lead-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, .7fr) auto; align-items: center; gap: 14px; padding: 12px 3px; border-top: 1px solid #f0f1f5; }
+.late-lead-person, .late-lead-activity { min-width: 0; display: grid; gap: 4px; }
+.late-lead-person strong { overflow: hidden; color: #363d4d; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.late-lead-person small, .late-lead-activity span { overflow: hidden; color: #9299a8; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.late-lead-activity strong { color: #a56b15; font-size: 10px; }
+.late-lead-action { min-height: 30px; padding: 0 10px; font-size: 9px; }
+.late-lead-empty { min-height: 105px; }
 .priority-visits-card { padding: 19px 20px 10px; margin-bottom: 19px; }
 .priority-visit-list { display: grid; margin-top: 12px; }
 .priority-visit-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(150px, .75fr) auto; align-items: center; gap: 14px; padding: 12px 3px; border-top: 1px solid #f0f1f5; }
@@ -283,6 +292,10 @@ select.input-control { appearance: auto; }
   .demo-banner { align-items: flex-start; font-size: 10px; }
   .follow-up-alert { align-items: flex-start; }
   .follow-up-alert .button { align-self: center; flex: 0 0 auto; }
+  .late-leads-card { padding: 16px 13px 8px; }
+  .late-lead-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .late-lead-activity { grid-column: 1; padding-left: 1px; }
+  .late-lead-action { grid-column: 2; grid-row: 1 / span 2; }
   .priority-visits-card { padding: 16px 13px 8px; }
   .priority-visit-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
   .priority-visit-date { grid-column: 1; padding-left: 39px; }

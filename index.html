@@ -143,6 +143,18 @@
             <button type="button" class="button button-alert" data-nav="leads">Lihat leads <span aria-hidden="true">→</span></button>
           </div>
 
+          <section class="content-card late-leads-card">
+            <div class="section-heading">
+              <div><h2>Laporan lead terlambat</h2><p class="muted">Lead tanpa aktivitas follow-up terbaru selama lebih dari 3 hari.</p></div>
+              <span class="table-count" id="late-lead-count">0 lead</span>
+            </div>
+            <div class="late-lead-list" id="late-lead-list"></div>
+            <div class="empty-state is-hidden late-lead-empty" id="late-lead-empty">
+              <strong>Belum ada lead terlambat</strong>
+              <span>Lead yang lebih dari 3 hari belum di-follow-up akan muncul di sini.</span>
+            </div>
+          </section>
+
           <section class="content-card priority-visits-card">
             <div class="section-heading">
               <div><h2>Rencana visit minggu ini</h2><p class="muted">Hari diambil dari hasil FU; minggu dihitung Minggu–Sabtu.</p></div>

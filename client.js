@@ -85,6 +85,14 @@ function leadStatus(lead) {
   return needsFollowUp(lead) ? "Perlu di-follow-up" : "Belum jatuh tempo";
 }
 
+function followUpOverdueDays(lead, now = Date.now()) {
+  const lastActivity = latestFollowUp(lead);
+  const lastActivityAt = Date.parse(lastActivity?.createdAt || lead.createdAt);
+  return Number.isFinite(lastActivityAt)
+    ? Math.max(0, Math.floor((now - lastActivityAt) / (24 * 60 * 60 * 1000)))
+    : 0;
+}
+
 function lastActivity(lead) {
   const item = latestFollowUp(lead);
   return item ? `FU ${item.number}` : "FU 1";
@@ -190,6 +198,32 @@ function renderMetrics() {
   const alert = byId("follow-up-alert");
   alert.classList.toggle("is-hidden", dueLeads.length === 0);
   byId("follow-up-alert-message").textContent = `${dueLeads.length} lead sudah lebih dari 3 hari tanpa FU terbaru.`;
+  renderLateLeadReport(dueLeads);
+}
+
+function renderLateLeadReport(leads) {
+  const list = byId("late-lead-list");
+  const empty = byId("late-lead-empty");
+  const sorted = [...leads].sort((left, right) =>
+    followUpOverdueDays(right) - followUpOverdueDays(left)
+  );
+  byId("late-lead-count").textContent = `${sorted.length} lead`;
+  list.innerHTML = sorted.map((lead) => {
+    const lastFollowUp = latestFollowUp(lead);
+    const lastDate = lastFollowUp?.createdAt || lead.createdAt;
+    return `<article class="late-lead-row">
+      <div class="late-lead-person">
+        <strong>${safeText(lead.nameUser)}</strong>
+        <small>${safeText(lead.phone)} · ${safeText(lead.domicile || "Domisili belum diisi")}</small>
+      </div>
+      <div class="late-lead-activity">
+        <span>${safeText(lastActivity(lead))} terakhir · ${safeText(formatDate(dateInputValue(lastDate)))}</span>
+        <strong>Terlambat ${followUpOverdueDays(lead)} hari</strong>
+      </div>
+      ${state.user?.role === "admin" ? "" : `<button class="button button-secondary late-lead-action" type="button" data-follow-up="${safeText(lead.id)}">Buka FU</button>`}
+    </article>`;
+  }).join("");
+  empty.classList.toggle("is-hidden", sorted.length > 0);
 }
 
 function renderPriorityVisits() {
