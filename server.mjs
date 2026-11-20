@@ -39,6 +39,27 @@ const sheetHeaders = {
   sales_accounts: ["id", "name", "email", "password_salt", "password_hash", "spreadsheet_url", "is_active", "created_at"],
   leads: ["id", "name_user", "phone", "owner_id", "sales_name", "domicile", "source", "lead_code", "created_at", "final_result", "follow_ups"]
 };
+const CRM_STATUS_OPTIONS = ["Cold", "Warm", "Hot", "Closing"];
+const CRM_TAHAP_OPTIONS = ["Tanya-Tanya", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
+const CRM_SUMBER_OPTIONS = ["Meta Ads", "Tiktok", "Instagram", "Banner", "Poster", "Lihat Langsung"];
+const TAHAP_TO_STATUS_MAP = {
+  "Tanya-Tanya": "Cold",
+  "Janji Survey": "Warm",
+  "Survey": "Hot",
+  "ITJ": "Closing",
+  "Akad": "Closing"
+};
+const FU_KEYWORD_TO_TAHAP = [
+  ["batal", "Batal"], ["akad", "Akad"], ["itj", "ITJ"],
+  ["janji survey", "Janji Survey"], ["survey", "Survey"],
+  ["tanya-tanya", "Tanya-Tanya"], ["tanya tanya", "Tanya-Tanya"], ["tanya", "Tanya-Tanya"]
+];
+const crmTargets = {
+  leadsHarian: 0,
+  janjiSurveyHarian: 0,
+  surveyMingguan: 0,
+  itjBulanan: 0
+};
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -343,6 +364,10 @@ const leadHeaderAliases = {
   nameUser: ["namauser", "namalead", "namaleads", "nama", "nameuser", "leadname"],
   phone: ["nomorhp", "nohp", "nomorhandphone", "nomortelepon", "phone"],
   salesName: ["namasales", "sales", "salesname"],
+  pic: ["pic", "penanggungjawab"],
+  catatan: ["catatan", "catatanfu", "notes"],
+  status: ["status", "statuslead"],
+  tahap: ["tahap", "stage", "stages"],
   domicile: ["domisili", "kota", "domicile"],
   source: ["sumberlead", "sumberleads", "sumber", "source"],
   leadCode: ["kodelead", "kodeleads", "leadcode"],
@@ -509,12 +534,23 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
       followUps = [{ number: 1, result: "Lead masuk", createdAt: `${date}T00:00:00.000Z` }];
     }
   }
+  const tahapValue = String(get(schema.columns.tahap)).trim();
+  const tahap = CRM_TAHAP_OPTIONS.includes(tahapValue)
+    ? tahapValue
+    : "Tanya-Tanya";
+  const statusValue = String(get(schema.columns.status)).trim();
   return {
     id: spreadsheetLeadId(row, rowNumber, schema.columns),
     nameUser: String(get(schema.columns.nameUser)),
     phone: String(get(schema.columns.phone)),
     ownerId,
     salesName: String(get(schema.columns.salesName) || salesName),
+    pic: String(get(schema.columns.pic) || get(schema.columns.salesName) || salesName),
+    catatan: String(get(schema.columns.catatan)),
+    status: CRM_STATUS_OPTIONS.includes(statusValue)
+      ? statusValue
+      : (TAHAP_TO_STATUS_MAP[tahap] || "Cold"),
+    tahap,
     domicile: String(get(schema.columns.domicile)),
     source: String(get(schema.columns.source)),
     leadCode: String(get(schema.columns.leadCode)),
@@ -644,6 +680,10 @@ async function createSalesLead(lead) {
   set("domicile", lead.domicile);
   set("source", lead.source);
   set("leadCode", lead.leadCode);
+  set("pic", lead.pic);
+  set("catatan", lead.catatan);
+  set("status", lead.status);
+  set("tahap", lead.tahap);
   set("visitBooked", false);
   set("visitPlannedAt", "");
   set("createdAt", spreadsheetDateValue(todayLocal()));
@@ -687,9 +727,12 @@ async function saveSalesLead(lead, followUpNumber) {
     }
   };
   addUpdate(table.columns.finalResult, lead.finalResult);
+  addUpdate(table.columns.tahap, lead.tahap);
+  addUpdate(table.columns.status, lead.status);
   if (followUpNumber === null) {
     for (const field of [
-      "nameUser", "phone", "domicile", "source", "leadCode", "visitBooked", "visitPlannedAt"
+      "nameUser", "phone", "domicile", "source", "leadCode", "catatan",
+      "status", "tahap", "visitBooked", "visitPlannedAt"
     ]) {
       addUpdate(table.columns[field], lead[field]);
     }
@@ -749,6 +792,14 @@ function isValidDate(value) {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function detectTahapFromText(text) {
+  const lower = String(text || "").toLowerCase();
+  for (const [keyword, tahap] of FU_KEYWORD_TO_TAHAP) {
+    if (lower.includes(keyword)) return tahap;
+  }
+  return null;
+}
+
 async function readJson(request) {
   let body = "";
   for await (const chunk of request) {
@@ -770,6 +821,15 @@ export async function handleRequest(request, response) {
       mode: sheetsEnabled ? "spreadsheet" : "demo",
       connectedToDatabase: sheetsEnabled,
       connectedToSpreadsheet: sheetsEnabled
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/crm/options" && request.method === "GET") {
+    sendJson(response, 200, {
+      status: CRM_STATUS_OPTIONS,
+      tahap: CRM_TAHAP_OPTIONS,
+      sumber: CRM_SUMBER_OPTIONS
     });
     return;
   }
@@ -848,6 +908,31 @@ export async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/crm/targets" && request.method === "GET") {
+    sendJson(response, 200, { targets: { ...crmTargets } });
+    return;
+  }
+
+  if (url.pathname === "/api/crm/targets" && request.method === "PATCH") {
+    if (session.role !== "admin") {
+      sendJson(response, 403, { error: "Perubahan target hanya untuk admin." });
+      return;
+    }
+    const input = await readJson(request);
+    for (const key of Object.keys(crmTargets)) {
+      if (input[key] !== undefined) {
+        const value = Number(input[key]);
+        if (!Number.isFinite(value) || value < 0) {
+          sendJson(response, 400, { error: "Target harus berupa angka tidak negatif." });
+          return;
+        }
+        crmTargets[key] = value;
+      }
+    }
+    sendJson(response, 200, { targets: { ...crmTargets } });
+    return;
+  }
+
   if (url.pathname === "/api/admin/sales" && request.method === "GET") {
     sendJson(response, 200, { sales: await listSalesAccounts() });
     return;
@@ -921,11 +1006,13 @@ export async function handleRequest(request, response) {
   }
 
   if (url.pathname === "/api/leads" && request.method === "GET") {
-    if (session.role !== "sales") {
-      sendJson(response, 403, { error: "Akses data lead hanya untuk sales." });
+    if (session.role === "admin") {
+      const sales = await listSalesAccounts();
+      const batches = await Promise.all(sales.map((account) => listSalesLeads(account.id)));
+      sendJson(response, 200, { leads: batches.flat(), role: "admin" });
       return;
     }
-    sendJson(response, 200, { leads: await listSalesLeads(session.salesId) });
+    sendJson(response, 200, { leads: await listSalesLeads(session.salesId), role: "sales" });
     return;
   }
 
@@ -957,9 +1044,17 @@ export async function handleRequest(request, response) {
         phone,
         ownerId: account.id,
         salesName: account.name,
+        pic: account.name,
+        catatan: String(input.catatan || "").trim(),
         domicile: String(input.domicile || "").trim(),
         source: String(input.source || "").trim(),
         leadCode: String(input.leadCode || "").trim(),
+        tahap: CRM_TAHAP_OPTIONS.includes(String(input.tahap || "").trim())
+          ? String(input.tahap).trim()
+          : "Tanya-Tanya",
+        status: TAHAP_TO_STATUS_MAP[CRM_TAHAP_OPTIONS.includes(String(input.tahap || "").trim())
+          ? String(input.tahap).trim()
+          : "Tanya-Tanya"] || "Cold",
         createdAt,
         finalResult: "",
         followUps: [{
@@ -997,8 +1092,13 @@ export async function handleRequest(request, response) {
         phone: String(input.phone || "").trim(),
         domicile: String(input.domicile || "").trim(),
         source: String(input.source || "").trim(),
-        leadCode: String(input.leadCode || "").trim()
+        leadCode: String(input.leadCode || "").trim(),
+        catatan: String(input.catatan ?? lead.catatan ?? "").trim()
       };
+      if (CRM_TAHAP_OPTIONS.includes(String(input.tahap || "").trim())) {
+        updates.tahap = String(input.tahap).trim();
+        updates.status = TAHAP_TO_STATUS_MAP[updates.tahap] || lead.status;
+      }
       if (!updates.nameUser || updates.nameUser.length > 100 || !updates.phone || updates.phone.length > 30 ||
         updates.domicile.length > 100 || updates.source.length > 100 || updates.leadCode.length > 50) {
         sendJson(response, 400, { error: "Periksa kembali nama, nomor HP, domisili, sumber, dan kode lead." });
@@ -1079,6 +1179,11 @@ export async function handleRequest(request, response) {
       const createdAt = new Date().toISOString();
       const late = todayLocal() > addDays(followUpDate, 2);
       lead.finalResult = result;
+      const detectedTahap = detectTahapFromText(result);
+      if (detectedTahap && detectedTahap !== lead.tahap) {
+        lead.tahap = detectedTahap;
+        lead.status = TAHAP_TO_STATUS_MAP[detectedTahap] || lead.status;
+      }
       if (existing) {
         existing.result = result;
         existing.createdAt = createdAt;

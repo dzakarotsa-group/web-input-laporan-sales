@@ -158,7 +158,7 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       <td>${renderVisitToggle(lead)}</td>
       <td>${safeText(lastActivity(lead))}</td>
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
-      <td><div class="row-actions"><button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Buat atau edit follow-up untuk ${safeText(lead.nameUser)}">›</button></div></td>
+      <td>${state.user?.role === "admin" ? "—" : `<div class="row-actions"><button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Buat atau edit follow-up untuk ${safeText(lead.nameUser)}">›</button></div>`}</td>
     </tr>`;
   }).join("");
   empty.classList.toggle("is-hidden", filtered.length > 0);
@@ -576,6 +576,8 @@ document.addEventListener("click", (event) => {
     byId("edit-lead-domicile").value = lead.domicile || "";
     byId("edit-lead-source").value = lead.source || "";
     byId("edit-lead-code").value = lead.leadCode || "";
+    byId("edit-lead-tahap").value = lead.tahap || "Tanya-Tanya";
+    byId("edit-lead-catatan").value = lead.catatan || "";
     setFormError("edit-lead-error", "");
     byId("edit-lead-modal").showModal();
     return;
@@ -626,7 +628,9 @@ byId("edit-lead-form").addEventListener("submit", async (event) => {
         phone: byId("edit-lead-phone").value,
         domicile: byId("edit-lead-domicile").value,
         source: byId("edit-lead-source").value,
-        leadCode: byId("edit-lead-code").value
+        leadCode: byId("edit-lead-code").value,
+        tahap: byId("edit-lead-tahap").value,
+        catatan: byId("edit-lead-catatan").value
       })
     });
     await loadLeads();

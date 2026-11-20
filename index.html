@@ -281,6 +281,12 @@
           <label class="field-label" for="lead-source">Sumber leads<input class="input-control" id="lead-source" name="source" type="text" maxlength="100" placeholder="Contoh: Instagram"></label>
           <label class="field-label" for="lead-code">Kode leads<input class="input-control" id="lead-code" name="leadCode" type="text" maxlength="50" placeholder="Opsional"></label>
           <label class="field-label" for="lead-sales">Nama sales<input class="input-control" id="lead-sales" name="salesName" type="text" maxlength="100" value="Anisa"></label>
+          <label class="field-label" for="lead-tahap">Tahap
+            <select class="input-control" id="lead-tahap" name="tahap">
+              <option>Tanya-Tanya</option><option>Janji Survey</option><option>Survey</option><option>ITJ</option><option>Akad</option><option>Batal</option>
+            </select>
+          </label>
+          <label class="field-label" for="lead-catatan">Catatan<input class="input-control" id="lead-catatan" name="catatan" type="text" maxlength="1000" placeholder="Catatan awal lead"></label>
           <label class="field-label" for="lead-fu1-date">Tanggal FU 1 <span class="required">*</span><input class="input-control" id="lead-fu1-date" name="followUpDate" type="date" required></label>
         </div>
         <p class="field-hint">Pilih tanggal FU 1. Jika tanggal tersebut sudah lebih dari H+2, FU 1 akan ditandai terlambat.</p>
@@ -299,6 +305,12 @@
           <label class="field-label" for="edit-lead-domicile">Domisili<input class="input-control" id="edit-lead-domicile" type="text" maxlength="100"></label>
           <label class="field-label" for="edit-lead-source">Sumber leads<input class="input-control" id="edit-lead-source" type="text" maxlength="100"></label>
           <label class="field-label" for="edit-lead-code">Kode leads<input class="input-control" id="edit-lead-code" type="text" maxlength="50"></label>
+          <label class="field-label" for="edit-lead-tahap">Tahap
+            <select class="input-control" id="edit-lead-tahap">
+              <option>Tanya-Tanya</option><option>Janji Survey</option><option>Survey</option><option>ITJ</option><option>Akad</option><option>Batal</option>
+            </select>
+          </label>
+          <label class="field-label" for="edit-lead-catatan">Catatan<input class="input-control" id="edit-lead-catatan" type="text" maxlength="1000"></label>
         </div>
         <div class="form-error is-hidden" id="edit-lead-error" role="alert"></div>
         <div class="modal-actions"><button class="button button-secondary close-edit-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan perubahan <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
