@@ -1,4 +1,8 @@
 import { sundayToSaturdayRange, visitDateThisWeek } from "./visit-schedule.js";
+import {
+  computeDueFollowUp,
+  hasFollowUpToday as leadHasFollowUpToday
+} from "./follow-up-schedule.js";
 
 const state = {
   leads: [],
@@ -11,7 +15,6 @@ const state = {
   storageMode: "demo",
   editingLeadId: null
 };
-const FOLLOW_UP_REMINDER_MS = 3 * 24 * 60 * 60 * 1000;
 const leadFilterLabels = {
   month: "Leads bulan ini",
   due: "Perlu follow-up",
@@ -75,22 +78,21 @@ function isLateEntry(dateValue) {
   return Boolean(dateValue) && todayLocal() > dateAfter(dateValue, 2);
 }
 
-function needsFollowUp(lead, now = Date.now()) {
-  const lastActivity = latestFollowUp(lead);
-  const lastActivityAt = Date.parse(lastActivity?.createdAt || lead.createdAt);
-  return Number.isFinite(lastActivityAt) && now - lastActivityAt > FOLLOW_UP_REMINDER_MS;
+function dueFollowUp(lead) {
+  return computeDueFollowUp({ ...lead, createdAt: dateInputValue(lead.createdAt) }, todayLocal());
+}
+
+function needsFollowUp(lead) {
+  return Boolean(dueFollowUp(lead));
+}
+
+function dueTimingLabel(due) {
+  return due.daysOverdue === 0 ? "jatuh tempo hari ini" : `telat ${due.daysOverdue} hari`;
 }
 
 function leadStatus(lead) {
-  return needsFollowUp(lead) ? "Perlu di-follow-up" : "Belum jatuh tempo";
-}
-
-function followUpOverdueDays(lead, now = Date.now()) {
-  const lastActivity = latestFollowUp(lead);
-  const lastActivityAt = Date.parse(lastActivity?.createdAt || lead.createdAt);
-  return Number.isFinite(lastActivityAt)
-    ? Math.max(0, Math.floor((now - lastActivityAt) / (24 * 60 * 60 * 1000)))
-    : 0;
+  const due = dueFollowUp(lead);
+  return due ? `${due.label} · ${dueTimingLabel(due)}` : "Belum jatuh tempo";
 }
 
 function lastActivity(lead) {
@@ -109,9 +111,7 @@ function isFollowedUp(lead) {
 }
 
 function hasFollowUpToday(lead) {
-  return lead.followUps.some((item) =>
-    (item.followUpDate || dateInputValue(item.createdAt)) === todayLocal()
-  );
+  return leadHasFollowUpToday(lead, todayLocal());
 }
 
 function matchesLeadFilter(lead) {
@@ -197,7 +197,11 @@ function renderMetrics() {
   byId("nav-count").textContent = leads.length;
   const alert = byId("follow-up-alert");
   alert.classList.toggle("is-hidden", dueLeads.length === 0);
-  byId("follow-up-alert-message").textContent = `${dueLeads.length} lead sudah lebih dari 3 hari tanpa FU terbaru.`;
+  byId("follow-up-alert-message").textContent = `${dueLeads.length} lead butuh Follow Up`;
+  byId("follow-up-alert-list").innerHTML = dueLeads.map((lead) => {
+    const due = dueFollowUp(lead);
+    return `<button class="late-lead-chip" type="button" data-follow-up="${safeText(lead.id)}" data-follow-up-number="${due.number}">${safeText(lead.nameUser)} (${due.label} - ${dueTimingLabel(due)})</button>`;
+  }).join("");
   renderLateLeadReport(dueLeads);
 }
 
@@ -205,12 +209,13 @@ function renderLateLeadReport(leads) {
   const list = byId("late-lead-list");
   const empty = byId("late-lead-empty");
   const sorted = [...leads].sort((left, right) =>
-    followUpOverdueDays(right) - followUpOverdueDays(left)
+    dueFollowUp(right).daysOverdue - dueFollowUp(left).daysOverdue
   );
   byId("late-lead-count").textContent = `${sorted.length} lead`;
   list.innerHTML = sorted.map((lead) => {
     const lastFollowUp = latestFollowUp(lead);
     const lastDate = lastFollowUp?.createdAt || lead.createdAt;
+    const due = dueFollowUp(lead);
     return `<article class="late-lead-row">
       <div class="late-lead-person">
         <strong>${safeText(lead.nameUser)}</strong>
@@ -218,7 +223,7 @@ function renderLateLeadReport(leads) {
       </div>
       <div class="late-lead-activity">
         <span>${safeText(lastActivity(lead))} terakhir · ${safeText(formatDate(dateInputValue(lastDate)))}</span>
-        <strong>Terlambat ${followUpOverdueDays(lead)} hari</strong>
+        <strong>${due.label} · ${dueTimingLabel(due)}</strong>
       </div>
       ${state.user?.role === "admin" ? "" : `<button class="button button-secondary late-lead-action" type="button" data-follow-up="${safeText(lead.id)}">Buka FU</button>`}
     </article>`;
@@ -274,9 +279,17 @@ function renderFollowUpPicker() {
 
 function dateInputValue(value) {
   const text = String(value || "");
-  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
   const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function updateLateEntryAlert() {
@@ -620,7 +633,8 @@ document.addEventListener("click", (event) => {
   if (!action) return;
   showPage("follow-up");
   byId("follow-up-lead").value = action.dataset.followUp;
-  state.selectedFollowUp = nextFollowUpNumber(state.leads.find((lead) => lead.id === action.dataset.followUp));
+  state.selectedFollowUp = Number(action.dataset.followUpNumber) ||
+    nextFollowUpNumber(state.leads.find((lead) => lead.id === action.dataset.followUp));
   renderFollowUpPicker();
   syncSelectedFollowUpFields();
   renderSelectedLead();

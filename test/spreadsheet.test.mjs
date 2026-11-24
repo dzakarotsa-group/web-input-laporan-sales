@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
+import { hasFollowUpToday } from "../follow-up-schedule.js";
 
 test("existing sales sheet data is continued in place and kept separate per salesperson", async () => {
   const dateInJakarta = () => {
@@ -55,6 +56,10 @@ test("existing sales sheet data is continued in place and kept separate per sale
   nameOnlyLead[2] = "Lead Nama Saja";
   const phoneOnlyLead = Array(legacyHeaders.length).fill("");
   phoneOnlyLead[3] = "081234009999";
+  const undatedLead = Array(legacyHeaders.length).fill("");
+  undatedLead[1] = "Nanik";
+  undatedLead[2] = "Lead Tanpa Tanggal";
+  undatedLead[3] = "081234000333";
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(input);
@@ -73,7 +78,7 @@ test("existing sales sheet data is continued in place and kept separate per sale
       if (!workbooks.has(workbookId)) {
         const workbook = new Map();
         if (workbookId === "siti-sheet-id") {
-          workbook.set("Input Harian", [legacyHeaders, previousLead, nameOnlyLead, phoneOnlyLead, []]);
+          workbook.set("Input Harian", [legacyHeaders, previousLead, nameOnlyLead, phoneOnlyLead, undatedLead]);
         }
         workbooks.set(workbookId, workbook);
       }
@@ -199,15 +204,19 @@ test("existing sales sheet data is continued in place and kept separate per sale
     const salesCookie = await login(app.base, "sales", "siti@example.com", "654321");
     const oldLeadId = "code:LD-LAMA:081234000111";
     result = await request(app.base, "/api/leads", { cookie: salesCookie });
-    assert.equal(result.data.leads.length, 1);
-    assert.equal(result.data.leads[0].nameUser, "Lead Sebelumnya");
+    assert.equal(result.data.leads.length, 2);
     assert.ok(result.data.leads.every((lead) => lead.nameUser && lead.phone));
-    assert.equal(result.data.leads[0].followUps[1].result, "Pernah dihubungi");
-    assert.equal(result.data.leads[0].visitBooked, true);
-    assert.equal(result.data.leads[0].visitDate, "");
-    assert.equal(result.data.leads[0].visitPlannedAt, "");
-    assert.equal(result.data.leads[0].visitAvailable, true);
-    assert.equal(result.data.leads[0].visitCompleted, false);
+    const previousLeadResult = result.data.leads.find((lead) => lead.nameUser === "Lead Sebelumnya");
+    assert.equal(previousLeadResult.followUps[1].result, "Pernah dihubungi");
+    assert.equal(previousLeadResult.visitBooked, true);
+    assert.equal(previousLeadResult.visitDate, "");
+    assert.equal(previousLeadResult.visitPlannedAt, "");
+    assert.equal(previousLeadResult.visitAvailable, true);
+    assert.equal(previousLeadResult.visitCompleted, false);
+    const undatedResult = result.data.leads.find((lead) => lead.nameUser === "Lead Tanpa Tanggal");
+    assert.equal(undatedResult.createdAt, "");
+    assert.equal(undatedResult.followUps[0].createdAt, "");
+    assert.equal(hasFollowUpToday(undatedResult, dateInJakarta()), false);
 
     result = await request(app.base, `/api/leads/${oldLeadId}`, {
       method: "PATCH",
@@ -341,10 +350,10 @@ test("existing sales sheet data is continued in place and kept separate per sale
     app = await start(restarted.handleRequest);
     result = await request(app.base, "/api/leads", { cookie: salesCookie });
     assert.equal(result.response.status, 200, JSON.stringify(result.data));
-    assert.equal(result.data.leads.length, 2);
+    assert.equal(result.data.leads.length, 3);
     const afterRestartCookie = await login(app.base, "sales", "siti@example.com", "654321");
     result = await request(app.base, "/api/leads", { cookie: afterRestartCookie });
-    assert.equal(result.data.leads.length, 2);
+    assert.equal(result.data.leads.length, 3);
     const newLead = result.data.leads.find((lead) => lead.id === leadId);
     const existingLead = result.data.leads.find((lead) => lead.nameUser === "Lead Lama Diperbarui");
     assert.equal(newLead.followUps[1].result, "Sudah dihubungi");

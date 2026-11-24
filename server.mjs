@@ -525,13 +525,17 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
       return {
         number,
         result,
-        createdAt: followUpDate ? `${followUpDate}T00:00:00.000Z` : new Date().toISOString(),
+        createdAt: followUpDate ? `${followUpDate}T00:00:00.000Z` : "",
         ...(followUpDate ? { followUpDate } : {})
       };
     }).filter(Boolean);
     if (!followUps.length) {
-      const date = createdDate || new Date().toISOString().slice(0, 10);
-      followUps = [{ number: 1, result: "Lead masuk", createdAt: `${date}T00:00:00.000Z` }];
+      followUps = [{
+        number: 1,
+        result: "Lead masuk",
+        createdAt: createdDate ? `${createdDate}T00:00:00.000Z` : "",
+        ...(createdDate ? { followUpDate: createdDate } : {})
+      }];
     }
   }
   const tahapValue = String(get(schema.columns.tahap)).trim();
@@ -559,7 +563,7 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
     visitDate: spreadsheetDate(get(schema.columns.visitDate)),
     visitPlannedAt: String(get(schema.columns.visitPlannedAt)),
     visitAvailable: schema.columns.visitBooked !== undefined,
-    createdAt: createdDate ? `${createdDate}T00:00:00.000Z` : new Date().toISOString(),
+    createdAt: createdDate ? `${createdDate}T00:00:00.000Z` : "",
     finalResult,
     followUps
   };
@@ -1201,7 +1205,7 @@ export async function handleRequest(request, response) {
   }
 
   const asset = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-  if (!["index.html", "styles.css", "client.js", "visit-schedule.js"].includes(asset)) {
+  if (!["index.html", "styles.css", "client.js", "visit-schedule.js", "follow-up-schedule.js"].includes(asset)) {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Not found");
     return;
