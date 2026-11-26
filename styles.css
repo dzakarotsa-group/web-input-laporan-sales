@@ -187,11 +187,12 @@ tbody tr:last-child td { border-bottom: 0; }
 .priority-visit-date .visit-overdue { color: #b46c19; }
 .visit-action { min-height: 30px; padding: 0 10px; font-size: 9px; }
 .visit-history-note { margin: 8px 0 12px; color: #986a24; font-size: 10px; line-height: 1.5; }
-.visit-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; border: 1px solid #dfe2eb; border-radius: 7px; color: #6f7685; background: #fff; font-size: 9px; white-space: nowrap; }
+.visit-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px; border: 1px solid #dfe2eb; border-radius: 999px; color: #626a79; background: #fff; font-size: 10px; font-weight: 600; white-space: nowrap; transition: background .16s ease, border-color .16s ease, color .16s ease; }
 .visit-toggle:hover:not(:disabled) { border-color: #b8b9ef; color: #585bd4; background: #f8f8ff; }
-.visit-toggle.is-checked { border-color: #c8e8d8; color: #31845c; background: #f1fbf6; }
+.visit-toggle.is-checked { border-color: #b9e2cd; color: #28774f; background: #eef9f3; }
 .visit-toggle:disabled { cursor: not-allowed; opacity: .6; }
-.visit-checkmark { display: grid; place-items: center; width: 14px; height: 14px; border: 1px solid currentColor; border-radius: 4px; font-size: 10px; line-height: 1; }
+.visit-checkmark { display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; line-height: 1; }
+.visit-toggle.is-checked .visit-checkmark { border-color: transparent; background: rgba(40, 119, 79, .1); }
 .lead-filter-tools { display: flex; align-items: center; gap: 8px; color: #686ade; font-size: 9px; }
 .lead-filter-tools button { padding: 4px 7px; border: 1px solid #e6e7f2; border-radius: 6px; color: #5b5ed7; background: white; font-size: 9px; font-weight: 600; }
 .lead-filter-tools button:hover { background: #f7f7ff; }

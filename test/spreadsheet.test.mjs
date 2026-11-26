@@ -201,6 +201,8 @@ test("existing sales sheet data is continued in place and kept separate per sale
     });
     assert.equal(result.response.status, 201, JSON.stringify(result.data));
 
+    workbooks.get("test-spreadsheet").get("sales_accounts")[1][2] = "Siti@Example.com";
+    workbooks.get("test-spreadsheet").get("sales_accounts")[1][6] = "TRUE";
     const salesCookie = await login(app.base, "sales", "siti@example.com", "654321");
     const oldLeadId = "code:LD-LAMA:081234000111";
     result = await request(app.base, "/api/leads", { cookie: salesCookie });

@@ -179,7 +179,9 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
 function renderVisitToggle(lead) {
   const checked = Boolean(lead.visitBooked);
   const unavailable = lead.visitAvailable === false;
-  return `<button class="visit-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit="${safeText(lead.id)}" aria-pressed="${checked}"${unavailable ? ' disabled title="Kolom Rencana Visit tidak ditemukan di spreadsheet"' : ""}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : ""}</span><span>Rencana visit</span></button>`;
+  const action = checked ? "Batalkan janji visit" : "Buat janji visit";
+  const label = checked ? "Janji visit" : "Rencana visit";
+  return `<button class="visit-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit="${safeText(lead.id)}" aria-label="${action}" aria-pressed="${checked}"${unavailable ? ' disabled title="Kolom Rencana Visit tidak ditemukan di spreadsheet"' : ""}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : "+"}</span><span>${label}</span></button>`;
 }
 
 function renderMetrics() {

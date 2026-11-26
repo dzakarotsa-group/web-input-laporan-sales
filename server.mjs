@@ -319,7 +319,7 @@ function accountFromRow(row) {
     salt: row[3],
     hash: row[4],
     spreadsheetUrl: row[5],
-    isActive: row[6] === "true",
+    isActive: String(row[6] || "").trim().toLowerCase() === "true",
     createdAt: row[7]
   };
 }
@@ -587,8 +587,13 @@ async function updateSheetRow(title, rowNumber, row, targetSpreadsheetId = accou
 }
 
 async function findSalesAccountByEmail(email) {
-  if (!sheetsEnabled) return accounts.find((item) => item.email === email && item.isActive) || null;
-  const row = (await getSheetRows("sales_accounts")).find((item) => item[2] === email && item[6] === "true");
+  if (!sheetsEnabled) {
+    return accounts.find((item) => item.email.trim().toLowerCase() === email && item.isActive) || null;
+  }
+  const row = (await getSheetRows("sales_accounts")).find((item) =>
+    String(item[2] || "").trim().toLowerCase() === email &&
+    String(item[6] || "").trim().toLowerCase() === "true"
+  );
   return row ? accountFromRow(row) : null;
 }
 
