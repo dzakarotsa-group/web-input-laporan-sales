@@ -200,37 +200,6 @@ function renderMetrics() {
   const alert = byId("follow-up-alert");
   alert.classList.toggle("is-hidden", dueLeads.length === 0);
   byId("follow-up-alert-message").textContent = `${dueLeads.length} lead butuh Follow Up`;
-  byId("follow-up-alert-list").innerHTML = dueLeads.map((lead) => {
-    const due = dueFollowUp(lead);
-    return `<button class="late-lead-chip" type="button" data-follow-up="${safeText(lead.id)}" data-follow-up-number="${due.number}">${safeText(lead.nameUser)} (${due.label} - ${dueTimingLabel(due)})</button>`;
-  }).join("");
-  renderLateLeadReport(dueLeads);
-}
-
-function renderLateLeadReport(leads) {
-  const list = byId("late-lead-list");
-  const empty = byId("late-lead-empty");
-  const sorted = [...leads].sort((left, right) =>
-    dueFollowUp(right).daysOverdue - dueFollowUp(left).daysOverdue
-  );
-  byId("late-lead-count").textContent = `${sorted.length} lead`;
-  list.innerHTML = sorted.map((lead) => {
-    const lastFollowUp = latestFollowUp(lead);
-    const lastDate = lastFollowUp?.createdAt || lead.createdAt;
-    const due = dueFollowUp(lead);
-    return `<article class="late-lead-row">
-      <div class="late-lead-person">
-        <strong>${safeText(lead.nameUser)}</strong>
-        <small>${safeText(lead.phone)} · ${safeText(lead.domicile || "Domisili belum diisi")}</small>
-      </div>
-      <div class="late-lead-activity">
-        <span>${safeText(lastActivity(lead))} terakhir · ${safeText(formatDate(dateInputValue(lastDate)))}</span>
-        <strong>${due.label} · ${dueTimingLabel(due)}</strong>
-      </div>
-      ${state.user?.role === "admin" ? "" : `<button class="button button-secondary late-lead-action" type="button" data-follow-up="${safeText(lead.id)}">Buka FU</button>`}
-    </article>`;
-  }).join("");
-  empty.classList.toggle("is-hidden", sorted.length > 0);
 }
 
 function renderPriorityVisits() {
