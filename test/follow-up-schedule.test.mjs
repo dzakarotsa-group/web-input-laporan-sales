@@ -35,30 +35,30 @@ test("uses the Jakarta date when a follow-up has only a timestamp", () => {
   assert.equal(hasFollowUpToday(lead, "2026-11-24"), true);
 });
 
-test("reports the next overdue FU interval and its exact overdue days", () => {
+test("starts FU 2 at H+3 and advances to H+5 after it is completed", () => {
   const lead = {
     createdAt: "2026-11-01T04:00:00.000Z",
     tahap: "Tanya-Tanya",
     followUps: [{ number: 1, result: "Lead masuk" }]
   };
 
-  assert.deepEqual(computeDueFollowUp(lead, "2026-11-02"), {
+  assert.equal(computeDueFollowUp(lead, "2026-11-03"), null);
+  assert.deepEqual(computeDueFollowUp(lead, "2026-11-04"), {
     number: 2,
-    label: "H+1",
+    label: "H+3",
     daysOverdue: 0
   });
-  assert.deepEqual(computeDueFollowUp(lead, "2026-11-03"), {
+  assert.deepEqual(computeDueFollowUp(lead, "2026-11-06"), {
     number: 2,
-    label: "H+1",
-    daysOverdue: 1
+    label: "H+3",
+    daysOverdue: 2
   });
 
   lead.followUps.push({ number: 2, result: "Sudah dihubungi" });
-  assert.equal(computeDueFollowUp(lead, "2026-11-03"), null);
-  assert.deepEqual(computeDueFollowUp(lead, "2026-11-07"), {
+  assert.deepEqual(computeDueFollowUp(lead, "2026-11-06"), {
     number: 3,
-    label: "H+3",
-    daysOverdue: 3
+    label: "H+5",
+    daysOverdue: 0
   });
 });
 

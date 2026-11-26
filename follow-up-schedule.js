@@ -1,10 +1,9 @@
 const FU_INTERVALS = [
-  { number: 2, days: 1, label: "H+1" },
-  { number: 3, days: 3, label: "H+3" },
-  { number: 4, days: 5, label: "H+5" },
-  { number: 5, days: 7, label: "H+7" },
-  { number: 6, days: 14, label: "H+14" },
-  { number: 7, days: 21, label: "H+21" }
+  { number: 2, days: 3, label: "H+3" },
+  { number: 3, days: 5, label: "H+5" },
+  { number: 4, days: 7, label: "H+7" },
+  { number: 5, days: 14, label: "H+14" },
+  { number: 6, days: 21, label: "H+21" }
 ];
 const TERMINAL_STAGES = new Set(["ITJ", "Akad", "Batal"]);
 const DAY_MS = 24 * 60 * 60 * 1000;
