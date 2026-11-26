@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { generateKeyPairSync } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { hasFollowUpToday } from "../follow-up-schedule.js";
+
+test("Vercel includes the frontend's follow-up schedule module", async () => {
+  const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
+  assert.match(config.functions["server.mjs"].includeFiles, /follow-up-schedule\.js/);
+});
 
 test("existing sales sheet data is continued in place and kept separate per salesperson", async () => {
   const dateInJakarta = () => {
