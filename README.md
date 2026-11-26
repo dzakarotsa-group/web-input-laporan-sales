@@ -11,10 +11,14 @@ Lead Desk stores the sales account registry in a private Google Spreadsheet and 
 5. Generate a random `SESSION_SECRET` of at least 32 bytes with `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. This signs login cookies so sessions work across Vercel Function instances.
 6. Set a private `ADMIN_EMAIL` and a 6–12 digit `ADMIN_PASSWORD`, then run `npm start`.
 7. Open `/api/health`. A successful connection reports `"mode":"spreadsheet"` and `"connectedToSpreadsheet":true`.
-8. Log in as admin and register each salesperson with their own spreadsheet URL. Share every sales spreadsheet with the service account as **Editor**. Do not share the private account-registry spreadsheet with sales staff.
+8. Log in as admin and register each salesperson and leader with their own spreadsheet URL. Share every sales and leader spreadsheet with the service account as **Editor**. For each leader, select the sales accounts they may monitor. Do not share the private account-registry spreadsheet with sales staff or leaders.
 9. Existing sales sheets are recognized by headers such as `Nama User`, `Nomor HP`, and `FU 1`–`FU 8`. Keep the current headers and data in place; the app reads previous rows and appends new leads there.
 
 Sales can edit existing or newly added lead details. FU 1's date is entered when a lead is created; sales can then enter or update the date for FU 1–8 from the follow-up page. The app marks an entry late only when the current date in Jakarta is more than two days after the FU date (past H+2). Existing sheets keep their current columns and data.
+
+Admins can register marketing leaders, assign them a separate Google Spreadsheet, and select the active sales accounts they monitor. Leaders can create and manage leads, follow-ups, and visit plans in their own spreadsheet; assigned sales' leads remain read-only. Lead indicators are inferred from the latest non-empty FU result and written to an existing `Indikator` column as `COLD`, `WARM`, or `HOT`; if the message is unclear or contains cues from multiple categories, the current indicator is kept. The existing dropdown validation is preserved.
+
+The lead list has a WhatsApp action for valid customer numbers. It opens a blank chat in the WhatsApp account currently used by the logged-in user; it does not send a message or change the lead record. A leader can open chats for monitored leads but still cannot edit those sales' data.
 
 The overview metric cards are clickable filters for this month's leads, leads needing follow-up, followed-up leads, and today's follow-ups. All follow-up numbers, including FU 1, are counted only when their own date is today; a missing or unreadable spreadsheet date is not treated as today's date. The overview keeps the overdue reminder compact; selecting "Lihat daftar" opens the lead list filtered to leads needing follow-up. The schedule starts at FU 2 on H+3, then FU 3 on H+5, FU 4 on H+7, FU 5 on H+14, and FU 6 on H+21. It identifies the next unfilled FU, shows how overdue it is in the lead status, and provides a shortcut to record that FU. Leads at the ITJ, Akad, or Batal stage are excluded from reminders. A lead is valid only when both its name and phone number are filled in. Incomplete rows remain untouched in the spreadsheet but are excluded from the app and its metrics; the overview shows the five newest valid leads. The app recognizes the `Rencana Visit` and `Visit Terlaksana` columns. Toggling Rencana Visit from the web app updates the existing checkbox and records its Jakarta timestamp in a `Tanggal Rencana Visit` column appended to the sheet; this timestamp records when the checkbox was changed, not the appointment date. The weekly visit list requires an active Rencana Visit checkbox and reads a weekday from the most recent FU result that mentions both a visit and the weekday, for example `Janji visit hari Minggu`. It maps that weekday into the current Jakarta week, Sunday through Saturday. Google Sheets does not expose historical per-cell checkbox edit times through the Sheets API, so edits made directly in Sheets do not record the checkbox timestamp.
 
@@ -33,10 +37,11 @@ The app does not delete or automatically copy data from the old Supabase project
 The backend creates these headers automatically when the tabs are empty:
 
 - `sales_accounts`: `id`, `name`, `email`, `password_salt`, `password_hash`, `spreadsheet_url`, `is_active`, `created_at`
-- `leads`: `id`, `name_user`, `phone`, `owner_id`, `sales_name`, `domicile`, `source`, `lead_code`, `created_at`, `final_result`, `follow_ups`
+- `marketing_leaders`: `id`, `name`, `email`, `password_salt`, `password_hash`, `sales_ids`, `is_active`, `created_at`, `spreadsheet_url`
+- `leads`: `id`, `name_user`, `phone`, `owner_id`, `sales_name`, `domicile`, `source`, `lead_code`, `indicator`, `created_at`, `final_result`, `follow_ups`, `visit_booked`, `visit_completed`
 
 ## Local demo
 
 With no Google Sheets variables set, `npm start` runs a local demo using temporary sample data. This mode is not persistent and must not be used for real or online data. Install Node.js 22 or newer and open `http://127.0.0.1:4173`.
 
-The app hashes sales passwords before storing them. Google service-account credentials stay on the backend. Keep the account-registry spreadsheet private because it contains password hashes; each sales spreadsheet can be shared only with its owner and the service account. Login cookies are signed and expire after eight hours.
+The app hashes sales and leader passwords before storing them. Google service-account credentials stay on the backend. Keep the account-registry spreadsheet private because it contains password hashes; each sales spreadsheet can be shared only with its owner and the service account. Login cookies are signed and expire after eight hours.

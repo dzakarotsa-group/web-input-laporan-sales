@@ -20,6 +20,7 @@
         <p class="login-copy">Masuk untuk mengelola lead dan hasil follow-up dalam satu tempat.</p>
         <div class="login-roles" role="group" aria-label="Jenis akun">
           <button type="button" class="login-role is-active" data-login-role="sales">Sales</button>
+          <button type="button" class="login-role" data-login-role="leader">Leader</button>
           <button type="button" class="login-role" data-login-role="admin">Admin</button>
         </div>
         <form id="login-form" class="login-form">
@@ -53,11 +54,11 @@
         </a>
         <p class="nav-caption">MENU</p>
         <nav class="side-nav" aria-label="Menu utama">
-          <button class="nav-item is-active sales-only" data-nav="overview" type="button">
+          <button class="nav-item is-active sales-or-leader" data-nav="overview" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             <span>Ringkasan</span>
           </button>
-          <button class="nav-item sales-only" data-nav="leads" type="button">
+          <button class="nav-item sales-or-leader" data-nav="leads" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8M18 14a5 5 0 0 1 3 4.6V20"/></svg>
             <span>Data leads</span><span class="nav-count" id="nav-count">3</span>
           </button>
@@ -170,7 +171,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Indikator</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody id="leads-table-body"></tbody>
               </table>
               <div class="empty-state is-hidden" id="empty-state">
@@ -185,7 +186,7 @@
 
         <section class="page-content is-hidden" id="leads-page">
           <div class="welcome-row compact-welcome">
-            <div><p class="eyebrow">DATABASE</p><h1>Data leads</h1><p class="muted">Cari dan kelola lead yang sudah dimasukkan.</p></div>
+            <div><p class="eyebrow">DATABASE</p><h1>Data leads</h1><p class="muted">Cari leads. Indikator mengikuti isi FU terakhir; sinyal campuran tidak mengubah nilai sebelumnya.</p></div>
             <button class="button button-primary sales-only" data-open-form="new-lead" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah lead</button>
           </div>
           <section class="content-card">
@@ -195,7 +196,7 @@
               <span class="table-count" id="table-count-all">3 leads</span>
             </div>
             <div class="table-scroll">
-              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Status</th><th></th></tr></thead><tbody id="leads-table-all"></tbody></table>
+              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Indikator</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="leads-table-all"></tbody></table>
               <div class="empty-state is-hidden" id="empty-state-all"><span class="empty-icon">⌕</span><strong>Lead tidak ditemukan</strong><span>Coba kata kunci lain.</span></div>
             </div>
           </section>
@@ -240,8 +241,11 @@
 
         <section class="page-content is-hidden" id="admin-page">
           <div class="welcome-row compact-welcome">
-            <div><p class="eyebrow">ADMINISTRASI</p><h1>Kelola sales</h1><p class="muted">Daftarkan akun sales, hubungkan link spreadsheet, atau nonaktifkan akses.</p></div>
-            <button class="button button-primary" id="open-add-sales" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Daftarkan sales</button>
+            <div><p class="eyebrow">ADMINISTRASI</p><h1>Kelola akun</h1><p class="muted">Daftarkan sales dan leader marketing, lalu atur akses.</p></div>
+            <div class="admin-account-actions">
+              <button class="button button-secondary" id="open-add-leader" type="button">Daftarkan leader</button>
+              <button class="button button-primary" id="open-add-sales" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Daftarkan sales</button>
+            </div>
           </div>
           <div class="demo-banner admin-demo-banner">
             <span class="banner-icon" aria-hidden="true">i</span>
@@ -260,12 +264,25 @@
               <div class="empty-state is-hidden" id="sales-empty"><strong>Belum ada akun sales</strong><span>Daftarkan sales untuk mulai mengelola akun.</span></div>
             </div>
           </section>
+          <section class="content-card admin-sales-card">
+            <div class="section-heading admin-sales-heading">
+              <div><h2>Akun leader marketing</h2><p class="muted">Leader hanya dapat melihat data sales yang ditugaskan.</p></div>
+              <span class="table-count" id="leaders-count">0 leader aktif</span>
+            </div>
+            <div class="table-scroll">
+              <table class="admin-sales-table">
+                <thead><tr><th>Nama leader</th><th>Email login</th><th>Spreadsheet leader</th><th>Sales dipantau</th><th>Status</th><th>Akses</th></tr></thead>
+                <tbody id="leaders-table-body"></tbody>
+              </table>
+              <div class="empty-state is-hidden" id="leaders-empty"><strong>Belum ada akun leader</strong><span>Daftarkan leader dan pilih sales yang dipantau.</span></div>
+            </div>
+          </section>
           <p class="admin-security-note">Sesi login berakhir saat server dimulai ulang. Lindungi spreadsheet dan kredensial service account; hanya backend yang boleh mengaksesnya.</p>
         </section>
       </main>
       <nav class="mobile-nav" aria-label="Navigasi bawah">
-        <button class="mobile-nav-item is-active sales-only" data-nav="overview" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Ringkasan</span></button>
-        <button class="mobile-nav-item sales-only" data-nav="leads" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8"/></svg><span>Leads</span></button>
+        <button class="mobile-nav-item is-active sales-or-leader" data-nav="overview" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Ringkasan</span></button>
+        <button class="mobile-nav-item sales-or-leader" data-nav="leads" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8"/></svg><span>Leads</span></button>
         <button class="mobile-nav-item sales-only" data-nav="follow-up" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-11.8 6.1L4 19l1.4-3.8A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8.5 11.5h7M12 8v7"/></svg><span>Follow-up</span></button>
         <button class="mobile-nav-item is-hidden" id="mobile-admin-nav" data-nav="admin" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5c0 5 3.2 8.3 7.5 10 4.3-1.7 7.5-5 7.5-10V6L12 3Z"/><circle cx="12" cy="10" r="2.2"/></svg><span>Admin</span></button>
       </nav>
@@ -329,6 +346,25 @@
         <p class="field-hint">Setiap sales harus memakai spreadsheet berbeda. Bagikan akses Editor ke service account Google; format sheet yang sudah ada akan dipakai, dan tab leads dibuat hanya jika spreadsheet masih kosong.</p>
         <div class="form-error is-hidden" id="add-sales-error" role="alert"></div>
         <div class="modal-actions"><button class="button button-secondary close-sales-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan akun <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="add-leader-modal">
+      <div class="modal-header"><div><p class="eyebrow">AKUN BARU</p><h2 id="leader-modal-title">Daftarkan leader marketing</h2><p class="muted" id="leader-modal-description">Leader mengelola spreadsheet sendiri dan memantau sales yang dipilih.</p></div><button class="icon-button close-leader-modal" aria-label="Tutup" type="button">×</button></div>
+      <form id="add-leader-form">
+        <div class="form-grid" id="leader-account-fields">
+          <label class="field-label" for="leader-name">Nama leader <span class="required">*</span><input id="leader-name" class="input-control" type="text" maxlength="100" required></label>
+          <label class="field-label" for="leader-email">Email login <span class="required">*</span><input id="leader-email" class="input-control" type="email" maxlength="254" required></label>
+          <label class="field-label" for="leader-password">Password angka <span class="required">*</span><input id="leader-password" class="input-control" type="password" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" required></label>
+        </div>
+        <label class="field-label spaced-label" for="leader-sheet">Link spreadsheet leader <span class="required">*</span><input id="leader-sheet" class="input-control" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." required></label>
+        <p class="field-hint">Gunakan spreadsheet berbeda dari sales lain dan beri akses Editor kepada service account Google.</p>
+        <fieldset class="leader-sales-select">
+          <legend>Sales yang dipantau <span class="required">*</span></legend>
+          <div id="leader-sales-options"></div>
+        </fieldset>
+        <div class="form-error is-hidden" id="add-leader-error" role="alert"></div>
+        <div class="modal-actions"><button class="button button-secondary close-leader-modal" type="button">Batal</button><button class="button button-primary" id="leader-submit-button" type="submit">Simpan akun leader</button></div>
       </form>
     </dialog>
 

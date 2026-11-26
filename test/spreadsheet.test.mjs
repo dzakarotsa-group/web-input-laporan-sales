@@ -5,9 +5,11 @@ import { createServer } from "node:http";
 import { test } from "node:test";
 import { hasFollowUpToday } from "../follow-up-schedule.js";
 
-test("Vercel includes the frontend's follow-up schedule module", async () => {
+test("Vercel includes the modules required by the frontend and backend", async () => {
   const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
   assert.match(config.functions["server.mjs"].includeFiles, /follow-up-schedule\.js/);
+  assert.match(config.functions["server.mjs"].includeFiles, /lead-indicator\.js/);
+  assert.match(config.functions["server.mjs"].includeFiles, /whatsapp-link\.js/);
 });
 
 test("existing sales sheet data is continued in place and kept separate per salesperson", async () => {
@@ -176,6 +178,8 @@ test("existing sales sheet data is continued in place and kept separate per sale
   };
 
   let app;
+  let leaderId;
+  let leaderCookie;
   try {
     const first = await import("../server.mjs?spreadsheet-test=first");
     app = await start(first.handleRequest);
@@ -195,6 +199,59 @@ test("existing sales sheet data is continued in place and kept separate per sale
       }
     });
     assert.equal(result.response.status, 201, JSON.stringify(result.data));
+    const sitId = workbooks.get("test-spreadsheet").get("sales_accounts")[1][0];
+    result = await request(app.base, "/api/admin/leaders", {
+      method: "POST",
+      cookie: adminCookie,
+      body: {
+        name: "Leader Siti",
+        email: "leader@example.com",
+        password: "987654",
+        spreadsheetUrl: "https://docs.google.com/spreadsheets/d/leader-sheet-id/edit",
+        salesIds: [sitId]
+      }
+    });
+    assert.equal(result.response.status, 201, JSON.stringify(result.data));
+    leaderId = result.data.leader.id;
+    assert.deepEqual(result.data.leader.salesIds, [sitId]);
+    assert.equal(workbooks.get("test-spreadsheet").get("marketing_leaders")[1][4] === "987654", false);
+    leaderCookie = await login(app.base, "leader", "leader@example.com", "987654");
+    result = await request(app.base, "/api/leads", { cookie: leaderCookie });
+    assert.equal(result.data.leads.length, 2);
+    assert.ok(result.data.leads.every((lead) => lead.salesName === "Siti"));
+    assert.ok(result.data.leads.every((lead) => lead.isOwnLead === false));
+    result = await request(app.base, "/api/leads", {
+      method: "POST",
+      cookie: leaderCookie,
+      body: {
+        nameUser: "Lead Leader",
+        phone: "081234009876",
+        domicile: "Surabaya",
+        followUpDate: dateInJakarta()
+      }
+    });
+    assert.equal(result.response.status, 201, JSON.stringify(result.data));
+    const leaderLeadId = result.data.lead.id;
+    assert.equal(result.data.lead.ownerId, leaderId);
+    result = await request(app.base, "/api/leads", { cookie: leaderCookie });
+    assert.equal(result.data.leads.length, 3);
+    assert.equal(result.data.leads.find((lead) => lead.id === leaderLeadId).isOwnLead, true);
+    assert.equal(result.data.leads.filter((lead) => lead.isOwnLead === false).length, 2);
+    result = await request(app.base, `/api/leads/${leaderLeadId}/follow-ups`, {
+      method: "POST",
+      cookie: leaderCookie,
+      body: {
+        number: 2,
+        followUpDate: dateInJakarta(),
+        result: "Siap survey lokasi"
+      }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.indicator, "HOT");
+    assert.equal(workbooks.get("leader-sheet-id").get("leads")[1][8], "HOT");
+    result = await request(app.base, "/api/admin/leaders", { cookie: leaderCookie });
+    assert.equal(result.response.status, 403);
+
     result = await request(app.base, "/api/admin/sales", {
       method: "POST",
       cookie: adminCookie,
@@ -301,10 +358,36 @@ test("existing sales sheet data is continued in place and kept separate per sale
       body: {
         number: 2,
         followUpDate: dateInJakarta(),
-        result: "Sudah dihubungi"
+        result: "Siap survey lokasi"
       }
     });
     assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.indicator, "HOT");
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[5][22], "HOT");
+    result = await request(app.base, `/api/leads/${leadId}/follow-ups`, {
+      method: "POST",
+      cookie: salesCookie,
+      body: {
+        number: 3,
+        followUpDate: dateInJakarta(),
+        result: "Tanya cicilan dan siap survey lokasi"
+      }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.indicator, "HOT");
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[5][22], "HOT");
+    result = await request(app.base, `/api/leads/${leadId}/follow-ups`, {
+      method: "POST",
+      cookie: salesCookie,
+      body: {
+        number: 4,
+        followUpDate: dateInJakarta(),
+        result: "Masih dipertimbangkan"
+      }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.indicator, "HOT");
+
     result = await request(app.base, `/api/leads/${oldLeadId}/follow-ups`, {
       method: "POST",
       cookie: salesCookie,
@@ -352,6 +435,46 @@ test("existing sales sheet data is continued in place and kept separate per sale
       }
     });
     assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    result = await request(app.base, "/api/leads", { cookie: leaderCookie });
+    assert.deepEqual(
+      result.data.leads.filter((lead) => !lead.isOwnLead).map((lead) => lead.salesName),
+      ["Siti", "Siti", "Siti"]
+    );
+    result = await request(app.base, `/api/leads/${budiLeadId}/follow-ups`, {
+      method: "POST",
+      cookie: leaderCookie,
+      body: {
+        number: 3,
+        followUpDate: dateInJakarta(),
+        result: "Siap survey lokasi"
+      }
+    });
+    assert.equal(result.response.status, 404);
+    result = await request(app.base, `/api/admin/leaders/${leaderId}`, {
+      method: "PATCH",
+      cookie: adminCookie,
+      body: { salesIds: [workbooks.get("test-spreadsheet").get("sales_accounts")[2][0]] }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    result = await request(app.base, "/api/leads", { cookie: leaderCookie });
+    assert.equal(result.data.leads.filter((lead) => lead.isOwnLead).length, 1);
+    assert.deepEqual(
+      result.data.leads.filter((lead) => !lead.isOwnLead).map((lead) => lead.salesName),
+      ["Budi"]
+    );
+    result = await request(app.base, `/api/admin/leaders/${leaderId}`, {
+      method: "PATCH",
+      cookie: adminCookie,
+      body: { isActive: false }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    result = await request(app.base, "/api/leads", { cookie: leaderCookie });
+    assert.equal(result.response.status, 401);
+    result = await request(app.base, "/api/auth/login", {
+      method: "POST",
+      body: { role: "leader", email: "leader@example.com", password: "987654" }
+    });
+    assert.equal(result.response.status, 401);
     await new Promise((resolve) => app.server.close(resolve));
 
     const restarted = await import("../server.mjs?spreadsheet-test=restart");
@@ -364,7 +487,10 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(result.data.leads.length, 3);
     const newLead = result.data.leads.find((lead) => lead.id === leadId);
     const existingLead = result.data.leads.find((lead) => lead.nameUser === "Lead Lama Diperbarui");
-    assert.equal(newLead.followUps[1].result, "Sudah dihubungi");
+    assert.equal(newLead.followUps[1].result, "FU 2 tercatat");
+    assert.equal(newLead.followUps[2].result, "Tanya cicilan dan siap survey lokasi");
+    assert.equal(newLead.followUps[3].result, "Masih dipertimbangkan");
+    assert.equal(newLead.indicator, "HOT");
     assert.equal(newLead.nameUser, "Dina Diperbarui");
     assert.equal(existingLead.followUps[2].result, "FU lama diteruskan");
     assert.equal(existingLead.followUps.find((item) => item.number === 8).result, "FU terakhir terlambat");
@@ -372,8 +498,8 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(existingLead.visitPlannedAt, workbooks.get("siti-sheet-id").get("Input Harian")[1][26]);
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian").length, 6);
     assert.equal(workbooks.get("siti-sheet-id").has("leads"), false);
-    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[5][20], "Sudah dihubungi");
-    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[5][21], "");
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[5][20], "Masih dipertimbangkan");
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[5][21], "Tanya cicilan dan siap survey lokasi");
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][20], "FU terakhir terlambat");
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][14], sheetDateSerial(lateDate));
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][21], "FU lama diteruskan");

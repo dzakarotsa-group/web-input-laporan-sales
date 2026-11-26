@@ -3,17 +3,20 @@ import {
   computeDueFollowUp,
   hasFollowUpToday as leadHasFollowUpToday
 } from "./follow-up-schedule.js";
+import { whatsappChatUrl } from "./whatsapp-link.js";
 
 const state = {
   leads: [],
   sales: [],
+  marketingLeaders: [],
   user: null,
   loginRole: "sales",
   selectedFollowUp: 2,
   activePage: "overview",
   leadFilter: "all",
   storageMode: "demo",
-  editingLeadId: null
+  editingLeadId: null,
+  editingLeaderId: null
 };
 const leadFilterLabels = {
   month: "Leads bulan ini",
@@ -106,6 +109,11 @@ function displayableLeads() {
   );
 }
 
+function canEditLead(lead) {
+  return state.user?.role === "sales" ||
+    (state.user?.role === "leader" && lead.isOwnLead === true);
+}
+
 function isFollowedUp(lead) {
   return lead.followUps.some((item) => item.number > 1 && item.result);
 }
@@ -146,7 +154,8 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
     ? sortedLeads.slice(0, 5)
     : sortedLeads.filter(matchesLeadFilter);
   const filtered = pageLeads.filter((lead) =>
-    `${lead.nameUser} ${lead.phone} ${lead.domicile}`.toLocaleLowerCase("id").includes(normalizedQuery)
+    `${lead.nameUser} ${lead.phone} ${lead.domicile} ${lead.salesName || ""}`
+      .toLocaleLowerCase("id").includes(normalizedQuery)
   );
   const empty = byId(targetId === "leads-table-body" ? "empty-state" : "empty-state-all");
   const count = byId(targetId === "leads-table-body" ? "table-count" : "table-count-all");
@@ -155,9 +164,21 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
     const colors = ["avatar-indigo", "avatar-green", "avatar-amber"];
     const columns = includePhone ? `<td>${safeText(lead.phone)}</td>` : "";
     const displayName = String(lead.nameUser || "").trim() || String(lead.phone || "").trim();
-    const secondary = lead.nameUser
-      ? lead.leadCode || lead.phone || "Lead baru"
-      : "Nama belum diisi";
+    const secondary = state.user?.role === "leader"
+      ? `Sales: ${lead.salesName || "Belum diketahui"}`
+      : lead.nameUser
+        ? lead.leadCode || lead.phone || "Lead baru"
+        : "Nama belum diisi";
+    const whatsappUrl = whatsappChatUrl(lead.phone);
+    const whatsappAction = whatsappUrl
+      ? `<a class="row-action whatsapp-action" href="${safeText(whatsappUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Buka WhatsApp untuk ${safeText(displayName)}" title="Chat WhatsApp">WA</a>`
+      : "";
+    const editActions = canEditLead(lead)
+      ? `<button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}" title="Edit lead">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Catat follow-up untuk ${safeText(lead.nameUser)}" title="Catat hasil follow-up">›</button>`
+      : "";
+    const actions = whatsappAction || editActions
+      ? `<div class="row-actions">${whatsappAction}${editActions}</div>`
+      : "—";
     return `<tr>
       <td><div class="user-cell"><span class="avatar ${colors[index % colors.length]}">${safeText(initials(displayName))}</span><span class="user-info"><strong>${safeText(displayName)}</strong><small>${safeText(secondary)}</small></span></div></td>
       ${columns}
@@ -165,8 +186,9 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       <td><span class="source-pill">${safeText(lead.source || "Lainnya")}</span></td>
       <td>${renderVisitToggle(lead)}</td>
       <td>${safeText(lastActivity(lead))}</td>
+      <td>${renderIndicator(lead.indicator)}</td>
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
-      <td>${state.user?.role === "admin" ? "—" : `<div class="row-actions"><button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Buat atau edit follow-up untuk ${safeText(lead.nameUser)}">›</button></div>`}</td>
+      <td>${actions}</td>
     </tr>`;
   }).join("");
   empty.classList.toggle("is-hidden", filtered.length > 0);
@@ -176,12 +198,24 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
   if (!isOverview) updateLeadFilterSummary();
 }
 
+function renderIndicator(value) {
+  const indicator = String(value || "").trim().toUpperCase();
+  if (!["COLD", "WARM", "HOT"].includes(indicator)) {
+    return '<span class="indicator-pill indicator-empty">—</span>';
+  }
+  return `<span class="indicator-pill indicator-${indicator.toLowerCase()}">${indicator}</span>`;
+}
+
 function renderVisitToggle(lead) {
   const checked = Boolean(lead.visitBooked);
-  const unavailable = lead.visitAvailable === false;
+  const readOnly = !canEditLead(lead);
+  const unavailable = readOnly || lead.visitAvailable === false;
   const action = checked ? "Batalkan janji visit" : "Buat janji visit";
   const label = checked ? "Janji visit" : "Rencana visit";
-  return `<button class="visit-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit="${safeText(lead.id)}" aria-label="${action}" aria-pressed="${checked}"${unavailable ? ' disabled title="Kolom Rencana Visit tidak ditemukan di spreadsheet"' : ""}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : "+"}</span><span>${label}</span></button>`;
+  const title = readOnly
+    ? "Akun ini hanya dapat melihat data"
+    : "Kolom Rencana Visit tidak ditemukan di spreadsheet";
+  return `<button class="visit-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit="${safeText(lead.id)}" aria-label="${action}" aria-pressed="${checked}"${unavailable ? ` disabled title="${title}"` : ""}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : "+"}</span><span>${label}</span></button>`;
 }
 
 function renderMetrics() {
@@ -279,7 +313,9 @@ function syncSelectedFollowUpFields() {
 function renderLeadOptions() {
   const select = byId("follow-up-lead");
   const currentId = select.value;
-  const leads = displayableLeads();
+  const leads = displayableLeads().filter((lead) =>
+    state.user?.role !== "leader" || lead.isOwnLead === true
+  );
   select.innerHTML = `<option value="">Pilih nama user</option>${leads.map((lead) => `<option value="${safeText(lead.id)}">${safeText(lead.nameUser || lead.phone)} · ${safeText(lead.phone)} · ${safeText(lead.domicile || "Domisili belum diisi")}</option>`).join("")}`;
   if (leads.some((lead) => lead.id === currentId)) select.value = currentId;
   if (!select.value && leads.length) select.value = leads[0].id;
@@ -398,10 +434,46 @@ function renderSalesAccounts() {
     </tr>`).join("");
 }
 
+function renderLeaderSalesOptions(selectedIds = []) {
+  const activeSales = state.sales.filter((account) => account.isActive);
+  byId("leader-sales-options").innerHTML = activeSales.length
+    ? activeSales.map((account) => `
+      <label class="leader-sales-option">
+        <input type="checkbox" name="leader-sales" value="${safeText(account.id)}"${selectedIds.includes(account.id) ? " checked" : ""}>
+        <span>${safeText(account.name)}</span>
+      </label>`).join("")
+    : '<span class="muted">Belum ada sales aktif.</span>';
+}
+
+function renderMarketingLeaders() {
+  const activeCount = state.marketingLeaders.filter((leader) => leader.isActive).length;
+  byId("leaders-count").textContent = `${activeCount} leader aktif`;
+  byId("leaders-empty").classList.toggle("is-hidden", state.marketingLeaders.length > 0);
+  byId("leaders-table-body").innerHTML = state.marketingLeaders.map((leader) => {
+    const assignedSales = leader.salesIds
+      .map((id) => state.sales.find((account) => account.id === id)?.name)
+      .filter(Boolean);
+    return `<tr>
+      <td><div class="user-cell"><span class="avatar avatar-green">${safeText(initials(leader.name))}</span><span class="user-info"><strong>${safeText(leader.name)}</strong><small>Leader marketing</small></span></div></td>
+      <td>${safeText(leader.email)}</td>
+      <td>${leader.spreadsheetUrl
+        ? `<a class="sheet-link" href="${safeText(leader.spreadsheetUrl)}" target="_blank" rel="noopener noreferrer">Buka spreadsheet ↗</a>`
+        : "Belum diatur"}</td>
+      <td>${safeText(assignedSales.join(", ") || "Tidak ada sales aktif")}</td>
+      <td><span class="status-pill ${leader.isActive ? "status-not-due" : "status-due"}">${leader.isActive ? "Aktif" : "Nonaktif"}</span></td>
+      <td><div class="leader-row-actions"><button class="button button-secondary account-state-button" type="button" data-edit-leader-id="${safeText(leader.id)}">Atur sales</button><button class="button button-secondary account-state-button" type="button" data-leader-id="${safeText(leader.id)}" data-next-active="${!leader.isActive}">${leader.isActive ? "Nonaktifkan" : "Aktifkan"}</button></div></td>
+    </tr>`;
+  }).join("");
+}
+
 async function loadSalesAccounts() {
   const data = await api("/api/admin/sales");
   state.sales = data.sales;
   renderSalesAccounts();
+  renderLeaderSalesOptions();
+  const leaders = await api("/api/admin/leaders");
+  state.marketingLeaders = leaders.leaders;
+  renderMarketingLeaders();
 }
 
 function enterWorkspace(user) {
@@ -409,15 +481,28 @@ function enterWorkspace(user) {
   byId("login-view").classList.add("is-hidden");
   byId("app-shell").classList.remove("is-hidden");
   byId("app-shell").classList.toggle("is-admin", user.role === "admin");
+  byId("app-shell").classList.toggle("is-leader", user.role === "leader");
   byId("profile-name").textContent = user.name;
   byId("profile-avatar").textContent = initials(user.name);
-  byId("profile-role").textContent = user.role === "admin" ? "Administrator" : user.email;
+  byId("profile-role").textContent = user.role === "admin"
+    ? "Administrator"
+    : user.role === "leader" ? "Leader marketing" : user.email;
   byId("welcome-name").textContent = user.name;
+  byId("overview-page").querySelector(".muted").textContent = user.role === "leader"
+    ? "Kelola leads milikmu dan pantau leads sales yang ditugaskan."
+    : "Pantau leads dan tindak lanjutmu hari ini.";
 
   const isAdmin = user.role === "admin";
+  const isLeader = user.role === "leader";
+  const isSales = user.role === "sales";
   byId("admin-nav").classList.toggle("is-hidden", !isAdmin);
   byId("mobile-admin-nav").classList.toggle("is-hidden", !isAdmin);
-  document.querySelectorAll(".sales-only").forEach((item) => item.classList.toggle("is-hidden", isAdmin));
+  document.querySelectorAll(".sales-only").forEach((item) =>
+    item.classList.toggle("is-hidden", !isSales && !isLeader)
+  );
+  document.querySelectorAll(".sales-or-leader").forEach((item) =>
+    item.classList.toggle("is-hidden", !isSales && !isLeader)
+  );
   byId("sheet-status-label").textContent = state.storageMode === "spreadsheet"
     ? "Tersinkron · Google Sheets"
     : "Data demo · lokal";
@@ -434,20 +519,37 @@ function enterWorkspace(user) {
   }
 }
 
-document.querySelectorAll("[data-login-role]").forEach((button) => {
-  button.addEventListener("click", () => {
-    state.loginRole = button.dataset.loginRole;
-    document.querySelectorAll("[data-login-role]").forEach((roleButton) => {
-      roleButton.classList.toggle("is-active", roleButton === button);
-    });
-    const adminSelected = state.loginRole === "admin";
-    byId("login-email").value = adminSelected ? "admin@demo.local" : "anisa@demo.local";
-    byId("login-password").value = adminSelected ? "246810" : "123456";
-    byId("login-demo-hint").innerHTML = adminSelected
-      ? "<strong>Akun demo admin</strong><br>admin@demo.local · 246810"
-      : "<strong>Akun demo sales</strong><br>anisa@demo.local · 123456";
-    setFormError("login-error", "");
+function selectLoginRole(role) {
+  state.loginRole = role;
+  document.querySelectorAll("[data-login-role]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.loginRole === role);
   });
+  if (state.storageMode === "spreadsheet") {
+    byId("login-email").value = "";
+    byId("login-password").value = "";
+    byId("login-demo-hint").innerHTML = role === "leader"
+      ? "<strong>Akun leader marketing</strong><br>Dibuat oleh admin."
+      : role === "admin"
+        ? "<strong>Akun administrator</strong><br>Gunakan kredensial admin."
+        : "<strong>Akun sales</strong><br>Dibuat oleh admin.";
+  } else if (role === "admin") {
+    byId("login-email").value = "admin@demo.local";
+    byId("login-password").value = "246810";
+    byId("login-demo-hint").innerHTML = "<strong>Akun demo admin</strong><br>admin@demo.local · 246810";
+  } else if (role === "leader") {
+    byId("login-email").value = "";
+    byId("login-password").value = "";
+    byId("login-demo-hint").innerHTML = "<strong>Akun leader marketing</strong><br>Dibuat oleh admin.";
+  } else {
+    byId("login-email").value = "anisa@demo.local";
+    byId("login-password").value = "123456";
+    byId("login-demo-hint").innerHTML = "<strong>Akun demo sales</strong><br>anisa@demo.local · 123456";
+  }
+  setFormError("login-error", "");
+}
+
+document.querySelectorAll("[data-login-role]").forEach((button) => {
+  button.addEventListener("click", () => selectLoginRole(button.dataset.loginRole));
 });
 
 byId("login-form").addEventListener("submit", async (event) => {
@@ -587,7 +689,7 @@ document.addEventListener("click", (event) => {
   const editAction = event.target.closest("[data-edit-lead]");
   if (editAction) {
     const lead = state.leads.find((item) => item.id === editAction.dataset.editLead);
-    if (!lead) return;
+    if (!lead || !canEditLead(lead)) return;
     state.editingLeadId = lead.id;
     byId("edit-lead-name").value = lead.nameUser;
     byId("edit-lead-phone").value = lead.phone;
@@ -602,6 +704,8 @@ document.addEventListener("click", (event) => {
   }
   const action = event.target.closest("[data-follow-up]");
   if (!action) return;
+  const selectedLead = state.leads.find((lead) => lead.id === action.dataset.followUp);
+  if (!selectedLead || !canEditLead(selectedLead)) return;
   showPage("follow-up");
   byId("follow-up-lead").value = action.dataset.followUp;
   state.selectedFollowUp = Number(action.dataset.followUpNumber) ||
@@ -615,7 +719,7 @@ document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-toggle-visit]");
   if (!button) return;
   const lead = state.leads.find((item) => item.id === button.dataset.toggleVisit);
-  if (!lead || lead.visitAvailable === false) return;
+  if (!lead || !canEditLead(lead) || lead.visitAvailable === false) return;
   button.disabled = true;
   try {
     await api(`/api/leads/${encodeURIComponent(lead.id)}/visit-plan`, {
@@ -674,6 +778,8 @@ byId("logout-button").addEventListener("click", async () => {
   state.user = null;
   state.leads = [];
   state.sales = [];
+  state.marketingLeaders = [];
+  byId("app-shell").classList.remove("is-admin", "is-leader");
   byId("app-shell").classList.add("is-hidden");
   byId("login-view").classList.remove("is-hidden");
   showPage("overview");
@@ -724,16 +830,104 @@ byId("sales-table-body").addEventListener("click", async (event) => {
   }
 });
 
+byId("open-add-leader").addEventListener("click", () => {
+  state.editingLeaderId = null;
+  byId("add-leader-form").reset();
+  byId("leader-account-fields").classList.remove("is-hidden");
+  byId("leader-account-fields").querySelectorAll("input").forEach((input) => { input.disabled = false; });
+  byId("leader-modal-title").textContent = "Daftarkan leader marketing";
+  byId("leader-modal-description").textContent = "Leader mengelola spreadsheet sendiri dan memantau sales yang dipilih.";
+  byId("leader-submit-button").textContent = "Simpan akun leader";
+  renderLeaderSalesOptions();
+  byId("add-leader-modal").showModal();
+});
+document.querySelectorAll(".close-leader-modal").forEach((button) => {
+  button.addEventListener("click", () => byId("add-leader-modal").close());
+});
+byId("add-leader-modal").addEventListener("click", (event) => {
+  if (event.target === byId("add-leader-modal")) byId("add-leader-modal").close();
+});
+
+byId("add-leader-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setFormError("add-leader-error", "");
+  const salesIds = [...document.querySelectorAll('input[name="leader-sales"]:checked')]
+    .map((input) => input.value);
+  try {
+    if (state.editingLeaderId) {
+      await api(`/api/admin/leaders/${encodeURIComponent(state.editingLeaderId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          salesIds,
+          spreadsheetUrl: byId("leader-sheet").value
+        })
+      });
+    } else {
+      await api("/api/admin/leaders", {
+        method: "POST",
+        body: JSON.stringify({
+          name: byId("leader-name").value,
+          email: byId("leader-email").value,
+          password: byId("leader-password").value,
+          salesIds,
+          spreadsheetUrl: byId("leader-sheet").value
+        })
+      });
+    }
+    await loadSalesAccounts();
+    form.reset();
+    byId("add-leader-modal").close();
+    showToast(state.editingLeaderId
+      ? "Sales yang dipantau berhasil diperbarui."
+      : "Akun leader marketing berhasil dibuat.");
+    state.editingLeaderId = null;
+  } catch (error) {
+    setFormError("add-leader-error", error.message);
+  }
+});
+
+byId("leaders-table-body").addEventListener("click", async (event) => {
+  const editButton = event.target.closest("[data-edit-leader-id]");
+  if (editButton) {
+    const leader = state.marketingLeaders.find((item) => item.id === editButton.dataset.editLeaderId);
+    if (!leader) return;
+    state.editingLeaderId = leader.id;
+    byId("add-leader-form").reset();
+    byId("leader-account-fields").classList.add("is-hidden");
+    byId("leader-account-fields").querySelectorAll("input").forEach((input) => { input.disabled = true; });
+    byId("leader-modal-title").textContent = `Atur sales untuk ${leader.name}`;
+    byId("leader-modal-description").textContent = "Ubah spreadsheet milik leader atau sales yang dapat dipantaunya.";
+    byId("leader-submit-button").textContent = "Simpan penugasan";
+    byId("leader-sheet").value = leader.spreadsheetUrl || "";
+    renderLeaderSalesOptions(leader.salesIds);
+    byId("add-leader-modal").showModal();
+    return;
+  }
+  const button = event.target.closest("[data-leader-id]");
+  if (!button) return;
+  try {
+    await api(`/api/admin/leaders/${encodeURIComponent(button.dataset.leaderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive: button.dataset.nextActive === "true" })
+    });
+    await loadSalesAccounts();
+    showToast(button.dataset.nextActive === "true"
+      ? "Akun leader diaktifkan."
+      : "Akses leader dinonaktifkan.");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
 api("/api/health").then(({ mode }) => {
   state.storageMode = mode;
   if (mode === "spreadsheet") {
-    byId("login-demo-hint").innerHTML = "<strong>Masuk dengan akun terdaftar</strong><br>Akun sales dibuat oleh admin.";
     byId("login-footnote").textContent = "Data akun, leads, dan follow-up tersimpan di Google Sheets.";
-    byId("login-email").value = "";
-    byId("login-password").value = "";
   } else {
     byId("login-footnote").textContent = "Mode demo lokal. Data akan terhapus saat server dimulai ulang.";
   }
+  selectLoginRole(state.loginRole);
 }).catch((error) => {
   setFormError("login-error", error.message);
 });

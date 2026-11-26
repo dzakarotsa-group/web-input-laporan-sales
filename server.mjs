@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { createHmac, createSign, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { inferLeadIndicator, latestCommunication } from "./lead-indicator.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const accountsSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || "";
@@ -37,7 +38,8 @@ const sheetsReadyPromises = new Map();
 const leadTableCache = new Map();
 const sheetHeaders = {
   sales_accounts: ["id", "name", "email", "password_salt", "password_hash", "spreadsheet_url", "is_active", "created_at"],
-  leads: ["id", "name_user", "phone", "owner_id", "sales_name", "domicile", "source", "lead_code", "created_at", "final_result", "follow_ups"]
+  marketing_leaders: ["id", "name", "email", "password_salt", "password_hash", "sales_ids", "is_active", "created_at", "spreadsheet_url"],
+  leads: ["id", "name_user", "phone", "owner_id", "sales_name", "domicile", "source", "lead_code", "indicator", "created_at", "final_result", "follow_ups", "visit_booked", "visit_completed"]
 };
 const CRM_STATUS_OPTIONS = ["Cold", "Warm", "Hot", "Closing"];
 const CRM_TAHAP_OPTIONS = ["Tanya-Tanya", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
@@ -84,6 +86,7 @@ const accounts = [
     isActive: true
   }
 ];
+const marketingLeaders = [];
 const admin = {
   email: (process.env.ADMIN_EMAIL || "admin@demo.local").trim().toLowerCase(),
   ...passwordRecord(process.env.ADMIN_PASSWORD || "246810")
@@ -162,8 +165,10 @@ function readSessionToken(token) {
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (!Number.isFinite(session.expiresAt) || !["admin", "sales"].includes(session.role) ||
-      (session.role === "sales" && typeof session.salesId !== "string")) {
+    if (!Number.isFinite(session.expiresAt) ||
+      !["admin", "sales", "leader"].includes(session.role) ||
+      (session.role === "sales" && typeof session.salesId !== "string") ||
+      (session.role === "leader" && typeof session.leaderId !== "string")) {
       return null;
     }
     return session;
@@ -179,6 +184,9 @@ async function getSession(request) {
   if (session.role === "sales") {
     const account = await findSalesAccountById(session.salesId);
     if (!account?.isActive) return null;
+  } else if (session.role === "leader") {
+    const account = await findMarketingLeaderById(session.leaderId);
+    if (!account?.isActive) return null;
   }
   return session;
 }
@@ -193,6 +201,17 @@ function publicAccount(account) {
     id: account.id,
     name: account.name,
     email: account.email,
+    spreadsheetUrl: account.spreadsheetUrl,
+    isActive: account.isActive
+  };
+}
+
+function publicMarketingLeader(account) {
+  return {
+    id: account.id,
+    name: account.name,
+    email: account.email,
+    salesIds: account.salesIds,
     spreadsheetUrl: account.spreadsheetUrl,
     isActive: account.isActive
   };
@@ -291,6 +310,11 @@ async function ensureSheetsReady(targetSpreadsheetId = accountsSpreadsheetId, ti
             method: "PUT",
             body: JSON.stringify({ values: [headers] })
           }, targetSpreadsheetId);
+        } else if (title === "marketing_leaders" && values[0].length === headers.length - 1) {
+          await sheetsRequest(`values/${encodeURIComponent(`${title}!${columnName(headers.length - 1)}1`)}?valueInputOption=RAW`, {
+            method: "PUT",
+            body: JSON.stringify({ values: [[headers[headers.length - 1]]] })
+          }, targetSpreadsheetId);
         }
       }
     })().catch((error) => {
@@ -329,6 +353,35 @@ function accountToRow(account) {
     account.spreadsheetUrl, String(account.isActive), account.createdAt || new Date().toISOString()];
 }
 
+function marketingLeaderFromRow(row) {
+  let salesIds;
+  try {
+    salesIds = JSON.parse(String(row[5] || "[]"));
+  } catch (error) {
+    throw new Error(`Daftar sales pada akun leader tidak valid: ${error.message}`);
+  }
+  if (!Array.isArray(salesIds) || salesIds.some((id) => typeof id !== "string")) {
+    throw new Error("Daftar sales pada akun leader tidak valid.");
+  }
+  return {
+    id: row[0],
+    name: row[1],
+    email: row[2],
+    salt: row[3],
+    hash: row[4],
+    salesIds,
+    isActive: String(row[6] || "").trim().toLowerCase() === "true",
+    createdAt: row[7],
+    spreadsheetUrl: row[8] || ""
+  };
+}
+
+function marketingLeaderToRow(account) {
+  return [account.id, account.name, account.email, account.salt, account.hash,
+    JSON.stringify(account.salesIds), String(account.isActive), account.createdAt || new Date().toISOString(),
+    account.spreadsheetUrl];
+}
+
 function googleSpreadsheetId(value) {
   try {
     const url = new URL(value);
@@ -364,6 +417,7 @@ const leadHeaderAliases = {
   nameUser: ["namauser", "namalead", "namaleads", "nama", "nameuser", "leadname"],
   phone: ["nomorhp", "nohp", "nomorhandphone", "nomortelepon", "phone"],
   salesName: ["namasales", "sales", "salesname"],
+  indicator: ["indikator", "indicator"],
   pic: ["pic", "penanggungjawab"],
   catatan: ["catatan", "catatanfu", "notes"],
   status: ["status", "statuslead"],
@@ -558,6 +612,7 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
     domicile: String(get(schema.columns.domicile)),
     source: String(get(schema.columns.source)),
     leadCode: String(get(schema.columns.leadCode)),
+    indicator: String(get(schema.columns.indicator)).trim(),
     visitBooked: spreadsheetFlag(get(schema.columns.visitBooked)) || Boolean(spreadsheetDate(get(schema.columns.visitDate))),
     visitCompleted: spreadsheetFlag(get(schema.columns.visitCompleted)),
     visitDate: spreadsheetDate(get(schema.columns.visitDate)),
@@ -598,15 +653,30 @@ async function findSalesAccountByEmail(email) {
 }
 
 async function salesEmailExists(email) {
-  if (!sheetsEnabled) return accounts.some((item) => item.email === email);
-  return (await getSheetRows("sales_accounts")).some((row) => row[2] === email);
+  if (!sheetsEnabled) {
+    return accounts.some((item) => item.email.trim().toLowerCase() === email);
+  }
+  return (await getSheetRows("sales_accounts")).some((row) =>
+    String(row[2] || "").trim().toLowerCase() === email
+  );
 }
 
-async function salesSpreadsheetExists(targetSpreadsheetId) {
+async function salesSpreadsheetExists(targetSpreadsheetId, excludeLeaderId = "") {
   const salesAccounts = sheetsEnabled
     ? (await getSheetRows("sales_accounts")).map(accountFromRow)
     : accounts;
-  return salesAccounts.some((account) => googleSpreadsheetId(account.spreadsheetUrl) === targetSpreadsheetId);
+  if (salesAccounts.some((account) => googleSpreadsheetId(account.spreadsheetUrl) === targetSpreadsheetId)) {
+    return true;
+  }
+  const leaders = sheetsEnabled
+    ? await getSheetRows("marketing_leaders")
+    : marketingLeaders;
+  return leaders.some((leader) => {
+    const leaderId = sheetsEnabled ? leader[0] : leader.id;
+    const spreadsheetUrl = sheetsEnabled ? leader[8] : leader.spreadsheetUrl;
+    return leaderId !== excludeLeaderId &&
+      googleSpreadsheetId(spreadsheetUrl) === targetSpreadsheetId;
+  });
 }
 
 async function findSalesAccountById(id) {
@@ -618,6 +688,72 @@ async function findSalesAccountById(id) {
 async function listSalesAccounts() {
   if (!sheetsEnabled) return accounts.map(publicAccount);
   return (await getSheetRows("sales_accounts")).map((row) => publicAccount(accountFromRow(row)));
+}
+
+async function findMarketingLeaderByEmail(email) {
+  if (!sheetsEnabled) {
+    return marketingLeaders.find((item) =>
+      item.email.trim().toLowerCase() === email && item.isActive
+    ) || null;
+  }
+  const row = (await getSheetRows("marketing_leaders")).find((item) =>
+    String(item[2] || "").trim().toLowerCase() === email &&
+    String(item[6] || "").trim().toLowerCase() === "true"
+  );
+  return row ? marketingLeaderFromRow(row) : null;
+}
+
+async function findMarketingLeaderById(id) {
+  if (!sheetsEnabled) return marketingLeaders.find((item) => item.id === id) || null;
+  const row = (await getSheetRows("marketing_leaders")).find((item) => item[0] === id);
+  return row ? marketingLeaderFromRow(row) : null;
+}
+
+async function marketingLeaderEmailExists(email) {
+  if (!sheetsEnabled) {
+    return marketingLeaders.some((item) => item.email.trim().toLowerCase() === email);
+  }
+  return (await getSheetRows("marketing_leaders")).some((row) =>
+    String(row[2] || "").trim().toLowerCase() === email
+  );
+}
+
+async function loginEmailExists(email) {
+  return email === admin.email ||
+    await salesEmailExists(email) ||
+    await marketingLeaderEmailExists(email);
+}
+
+async function listMarketingLeaders() {
+  if (!sheetsEnabled) return marketingLeaders.map(publicMarketingLeader);
+  return (await getSheetRows("marketing_leaders")).map((row) =>
+    publicMarketingLeader(marketingLeaderFromRow(row))
+  );
+}
+
+async function createMarketingLeader(leader) {
+  if (!sheetsEnabled) {
+    marketingLeaders.push(leader);
+    return leader;
+  }
+  await appendSheetRow("marketing_leaders", marketingLeaderToRow(leader));
+  return leader;
+}
+
+async function updateMarketingLeader(id, updates) {
+  if (!sheetsEnabled) {
+    const leader = marketingLeaders.find((item) => item.id === id);
+    if (!leader) return null;
+    Object.assign(leader, updates);
+    return leader;
+  }
+  const rows = await getSheetRows("marketing_leaders");
+  const index = rows.findIndex((row) => row[0] === id);
+  if (index < 0) return null;
+  const leader = marketingLeaderFromRow(rows[index]);
+  Object.assign(leader, updates);
+  await updateSheetRow("marketing_leaders", index + 2, marketingLeaderToRow(leader));
+  return leader;
 }
 
 async function createSalesAccount(account) {
@@ -644,36 +780,74 @@ async function setSalesAccountActive(id, isActive) {
   return account;
 }
 
-async function listSalesLeads(ownerId) {
+async function listSalesLeads(ownerId, ownerRole = "sales") {
   if (!sheetsEnabled) {
     return leads.filter((lead) => lead.ownerId === ownerId &&
-      String(lead.nameUser || "").trim() && String(lead.phone || "").trim());
+      String(lead.nameUser || "").trim() && String(lead.phone || "").trim())
+      .map((lead) => {
+        const indicator = inferLeadIndicator(latestCommunication(lead));
+        if (indicator) lead.indicator = indicator;
+        return lead;
+      });
   }
-  const account = await findSalesAccountById(ownerId);
-  if (!account) return [];
+  const account = ownerRole === "leader"
+    ? await findMarketingLeaderById(ownerId)
+    : await findSalesAccountById(ownerId);
+  if (!account?.spreadsheetUrl) return [];
   const ownerSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+  if (!ownerSpreadsheetId) throw new Error("Link spreadsheet akun tidak valid.");
   const table = await findLeadTable(ownerSpreadsheetId);
   const range = `${quoteSheetTitle(table.title)}!A${table.headerRow + 1}:AZ`;
   const { values = [] } = await sheetsRequest(`values/${encodeURIComponent(range)}`, {}, ownerSpreadsheetId);
-  return values.map((row, index) => ({ row, rowNumber: table.headerRow + index + 1 }))
+  const mappedLeadRows = values.map((row, index) => ({ row, rowNumber: table.headerRow + index + 1 }))
     .filter(({ row }) =>
       String(row[table.columns.nameUser] || "").trim() &&
       String(row[table.columns.phone] || "").trim()
     )
-    .map(({ row, rowNumber }) => leadFromSpreadsheetRow(
-      row, rowNumber, table, ownerId, account.name
-    ))
+    .map(({ row, rowNumber }) => ({
+      lead: leadFromSpreadsheetRow(row, rowNumber, table, ownerId, account.name),
+      row,
+      rowNumber
+    }));
+  const indicatorUpdates = [];
+  for (const { lead, row, rowNumber } of mappedLeadRows) {
+    const inferredIndicator = inferLeadIndicator(latestCommunication(lead));
+    if (!inferredIndicator) {
+      lead.indicator = lead.indicator.toUpperCase();
+      continue;
+    }
+    lead.indicator = inferredIndicator;
+    const currentIndicator = table.columns.indicator === undefined
+      ? ""
+      : String(row[table.columns.indicator] || "").trim();
+    if (table.columns.indicator !== undefined && currentIndicator !== inferredIndicator) {
+      indicatorUpdates.push({
+        range: `${quoteSheetTitle(table.title)}!${columnName(table.columns.indicator)}${rowNumber}`,
+        values: [[inferredIndicator]]
+      });
+    }
+  }
+  if (indicatorUpdates.length) {
+    await sheetsRequest("values:batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "RAW", data: indicatorUpdates })
+    }, ownerSpreadsheetId);
+  }
+  return mappedLeadRows.map(({ lead }) => lead)
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
-async function createSalesLead(lead) {
+async function createSalesLead(lead, ownerRole = "sales") {
   if (!sheetsEnabled) {
     leads.unshift(lead);
     return lead;
   }
-  const account = await findSalesAccountById(lead.ownerId);
-  if (!account) throw new Error("Akun sales tidak ditemukan.");
+  const account = ownerRole === "leader"
+    ? await findMarketingLeaderById(lead.ownerId)
+    : await findSalesAccountById(lead.ownerId);
+  if (!account?.spreadsheetUrl) throw new Error("Spreadsheet akun belum diatur oleh admin.");
   const targetSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+  if (!targetSpreadsheetId) throw new Error("Link spreadsheet akun tidak valid.");
   const table = await findLeadTable(targetSpreadsheetId);
   const row = Array(table.headers.length).fill("");
   const set = (field, value) => {
@@ -689,6 +863,7 @@ async function createSalesLead(lead) {
   set("domicile", lead.domicile);
   set("source", lead.source);
   set("leadCode", lead.leadCode);
+  set("indicator", lead.indicator || "");
   set("pic", lead.pic);
   set("catatan", lead.catatan);
   set("status", lead.status);
@@ -713,11 +888,18 @@ async function createSalesLead(lead) {
   return lead;
 }
 
-async function saveSalesLead(lead, followUpNumber) {
-  if (!sheetsEnabled) return lead;
-  const account = await findSalesAccountById(lead.ownerId);
-  if (!account) throw new Error("Akun sales tidak ditemukan.");
+async function saveSalesLead(lead, followUpNumber, ownerRole = "sales") {
+  if (!sheetsEnabled) {
+    const indicator = inferLeadIndicator(latestCommunication(lead));
+    if (indicator) lead.indicator = indicator;
+    return lead;
+  }
+  const account = ownerRole === "leader"
+    ? await findMarketingLeaderById(lead.ownerId)
+    : await findSalesAccountById(lead.ownerId);
+  if (!account?.spreadsheetUrl) throw new Error("Spreadsheet akun belum diatur oleh admin.");
   const targetSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+  if (!targetSpreadsheetId) throw new Error("Link spreadsheet akun tidak valid.");
   const table = await findLeadTable(targetSpreadsheetId);
   const range = `${quoteSheetTitle(table.title)}!A${table.headerRow + 1}:AZ`;
   const { values = [] } = await sheetsRequest(`values/${encodeURIComponent(range)}`, {}, targetSpreadsheetId);
@@ -726,6 +908,8 @@ async function saveSalesLead(lead, followUpNumber) {
   );
   if (index < 0) throw new Error("Lead tidak ditemukan di spreadsheet.");
   const rowNumber = table.headerRow + index + 1;
+  const inferredIndicator = inferLeadIndicator(latestCommunication(lead));
+  if (inferredIndicator) lead.indicator = inferredIndicator;
   const updates = [];
   const addUpdate = (column, value) => {
     if (column !== undefined && column >= 0) {
@@ -738,6 +922,7 @@ async function saveSalesLead(lead, followUpNumber) {
   addUpdate(table.columns.finalResult, lead.finalResult);
   addUpdate(table.columns.tahap, lead.tahap);
   addUpdate(table.columns.status, lead.status);
+  addUpdate(table.columns.indicator, lead.indicator || "");
   if (followUpNumber === null) {
     for (const field of [
       "nameUser", "phone", "domicile", "source", "leadCode", "catatan",
@@ -865,6 +1050,12 @@ export async function handleRequest(request, response) {
           session = { role: "sales", salesId: account.id };
           user = { role: "sales", name: account.name, email: account.email };
         }
+      } else if (role === "leader") {
+        const account = await findMarketingLeaderByEmail(email);
+        if (account && verifyPassword(password, account)) {
+          session = { role: "leader", leaderId: account.id };
+          user = { role: "leader", name: account.name, email: account.email };
+        }
       }
 
       if (!session) {
@@ -891,6 +1082,13 @@ export async function handleRequest(request, response) {
     }
     if (session.role === "admin") {
       sendJson(response, 200, { user: { role: "admin", name: "Admin" } });
+      return;
+    }
+    if (session.role === "leader") {
+      const leader = await findMarketingLeaderById(session.leaderId);
+      sendJson(response, 200, {
+        user: { role: "leader", name: leader.name, email: leader.email }
+      });
       return;
     }
     const account = await findSalesAccountById(session.salesId);
@@ -1014,6 +1212,121 @@ export async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/admin/leaders" && request.method === "GET") {
+    sendJson(response, 200, { leaders: await listMarketingLeaders() });
+    return;
+  }
+
+  if (url.pathname === "/api/admin/leaders" && request.method === "POST") {
+    try {
+      const input = await readJson(request);
+      const name = String(input.name || "").trim();
+      const email = String(input.email || "").trim().toLowerCase();
+      const password = String(input.password || "");
+      const spreadsheetUrl = String(input.spreadsheetUrl || "").trim();
+      const spreadsheetId = googleSpreadsheetId(spreadsheetUrl);
+      const salesIds = [...new Set(Array.isArray(input.salesIds)
+        ? input.salesIds.filter((id) => typeof id === "string")
+        : [])];
+      if (!name || name.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        sendJson(response, 400, { error: "Nama leader dan alamat email yang valid wajib diisi." });
+        return;
+      }
+      if (!/^\d{6,12}$/.test(password)) {
+        sendJson(response, 400, { error: "Password leader harus terdiri dari 6–12 angka." });
+        return;
+      }
+      if (!salesIds.length) {
+        sendJson(response, 400, { error: "Pilih minimal satu sales untuk dipantau." });
+        return;
+      }
+      if (!spreadsheetId) {
+        sendJson(response, 400, { error: "Masukkan link Google Sheets milik leader yang valid." });
+        return;
+      }
+      if (await salesSpreadsheetExists(spreadsheetId)) {
+        sendJson(response, 409, { error: "Spreadsheet ini sudah terhubung ke akun lain." });
+        return;
+      }
+      if (sheetsEnabled) await findLeadTable(spreadsheetId);
+      const activeSales = (await listSalesAccounts()).filter((account) => account.isActive);
+      if (salesIds.some((id) => !activeSales.some((account) => account.id === id))) {
+        sendJson(response, 400, { error: "Daftar sales leader tidak valid. Muat ulang pilihan sales." });
+        return;
+      }
+      if (await loginEmailExists(email)) {
+        sendJson(response, 409, { error: "Email sudah digunakan akun lain." });
+        return;
+      }
+      const leader = {
+        id: randomUUID(),
+        name,
+        email,
+        ...passwordRecord(password),
+        salesIds,
+        spreadsheetUrl,
+        isActive: true
+      };
+      sendJson(response, 201, {
+        leader: publicMarketingLeader(await createMarketingLeader(leader))
+      });
+    } catch (error) {
+      sendRouteError(response, error, "Data akun leader tidak valid.");
+    }
+    return;
+  }
+
+  const adminLeaderMatch = url.pathname.match(/^\/api\/admin\/leaders\/([^/]+)$/);
+  if (adminLeaderMatch && request.method === "PATCH") {
+    try {
+      const id = decodeURIComponent(adminLeaderMatch[1]);
+      const existing = await findMarketingLeaderById(id);
+      if (!existing) {
+        sendJson(response, 404, { error: "Akun leader tidak ditemukan." });
+        return;
+      }
+      const input = await readJson(request);
+      const updates = {};
+      if (typeof input.isActive === "boolean") updates.isActive = input.isActive;
+      if (input.salesIds !== undefined) {
+        const salesIds = [...new Set(Array.isArray(input.salesIds)
+          ? input.salesIds.filter((salesId) => typeof salesId === "string")
+          : [])];
+        const activeSales = (await listSalesAccounts()).filter((account) => account.isActive);
+        if (!salesIds.length || salesIds.some((salesId) =>
+          !activeSales.some((account) => account.id === salesId)
+        )) {
+          sendJson(response, 400, { error: "Pilih minimal satu sales aktif yang valid." });
+          return;
+        }
+        updates.salesIds = salesIds;
+      }
+      if (input.spreadsheetUrl !== undefined) {
+        const spreadsheetUrl = String(input.spreadsheetUrl || "").trim();
+        const spreadsheetId = googleSpreadsheetId(spreadsheetUrl);
+        if (!spreadsheetId) {
+          sendJson(response, 400, { error: "Masukkan link Google Sheets milik leader yang valid." });
+          return;
+        }
+        if (await salesSpreadsheetExists(spreadsheetId, id)) {
+          sendJson(response, 409, { error: "Spreadsheet ini sudah terhubung ke akun lain." });
+          return;
+        }
+        if (sheetsEnabled) await findLeadTable(spreadsheetId);
+        updates.spreadsheetUrl = spreadsheetUrl;
+      }
+      if (!Object.keys(updates).length) {
+        sendJson(response, 400, { error: "Pembaruan akun leader tidak valid." });
+        return;
+      }
+      const leader = await updateMarketingLeader(id, updates);
+      sendJson(response, 200, { leader: publicMarketingLeader(leader) });
+    } catch (error) {
+      sendRouteError(response, error, "Akun leader tidak dapat diperbarui.");
+    }
+    return;
+  }
+
   if (url.pathname === "/api/leads" && request.method === "GET") {
     if (session.role === "admin") {
       const sales = await listSalesAccounts();
@@ -1021,13 +1334,40 @@ export async function handleRequest(request, response) {
       sendJson(response, 200, { leads: batches.flat(), role: "admin" });
       return;
     }
+    if (session.role === "leader") {
+      const leader = await findMarketingLeaderById(session.leaderId);
+      if (!leader?.isActive) {
+        sendJson(response, 403, { error: "Akun leader tidak aktif." });
+        return;
+      }
+      const sales = (await listSalesAccounts()).filter((account) =>
+        account.isActive && leader.salesIds.includes(account.id)
+      );
+      const [ownLeads, batches] = await Promise.all([
+        listSalesLeads(leader.id, "leader"),
+        Promise.all(sales.map((account) => listSalesLeads(account.id)))
+      ]);
+      const salesNames = new Map(sales.map((account) => [account.id, account.name]));
+      sendJson(response, 200, {
+        leads: [
+          ...ownLeads.map((lead) => ({ ...lead, salesName: leader.name, isOwnLead: true })),
+          ...batches.flat().map((lead) => ({
+            ...lead,
+            salesName: salesNames.get(lead.ownerId) || "",
+            isOwnLead: false
+          }))
+        ],
+        role: "leader"
+      });
+      return;
+    }
     sendJson(response, 200, { leads: await listSalesLeads(session.salesId), role: "sales" });
     return;
   }
 
   if (url.pathname === "/api/leads" && request.method === "POST") {
-    if (session.role !== "sales") {
-      sendJson(response, 403, { error: "Akses data lead hanya untuk sales." });
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
       return;
     }
     try {
@@ -1041,9 +1381,12 @@ export async function handleRequest(request, response) {
         return;
       }
 
-      const account = await findSalesAccountById(session.salesId);
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const account = session.role === "leader"
+        ? await findMarketingLeaderById(ownerId)
+        : await findSalesAccountById(ownerId);
       if (!account) {
-        sendJson(response, 404, { error: "Akun sales tidak ditemukan." });
+        sendJson(response, 404, { error: "Akun tidak ditemukan." });
         return;
       }
       const createdAt = new Date().toISOString();
@@ -1051,7 +1394,7 @@ export async function handleRequest(request, response) {
         id: randomUUID(),
         nameUser,
         phone,
-        ownerId: account.id,
+        ownerId,
         salesName: account.name,
         pic: account.name,
         catatan: String(input.catatan || "").trim(),
@@ -1074,7 +1417,7 @@ export async function handleRequest(request, response) {
           late: todayLocal() > addDays(followUpDate, 2)
         }]
       };
-      const savedLead = await createSalesLead(lead);
+      const savedLead = await createSalesLead(lead, session.role);
       sendJson(response, 201, { lead: savedLead });
     } catch (error) {
       sendRouteError(response, error, "Data lead tidak valid.");
@@ -1084,13 +1427,14 @@ export async function handleRequest(request, response) {
 
   const leadEditMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (leadEditMatch && request.method === "PATCH") {
-    if (session.role !== "sales") {
-      sendJson(response, 403, { error: "Akses data lead hanya untuk sales." });
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
       return;
     }
     try {
       const input = await readJson(request);
-      const lead = (await listSalesLeads(session.salesId))
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const lead = (await listSalesLeads(ownerId, session.role))
         .find((item) => item.id === decodeURIComponent(leadEditMatch[1]));
       if (!lead) {
         sendJson(response, 404, { error: "Lead tidak ditemukan." });
@@ -1114,7 +1458,7 @@ export async function handleRequest(request, response) {
         return;
       }
       Object.assign(lead, updates);
-      sendJson(response, 200, { lead: await saveSalesLead(lead, null) });
+      sendJson(response, 200, { lead: await saveSalesLead(lead, null, session.role) });
     } catch (error) {
       sendRouteError(response, error, "Data lead tidak dapat diperbarui.");
     }
@@ -1123,8 +1467,8 @@ export async function handleRequest(request, response) {
 
   const visitPlanMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/visit-plan$/);
   if (visitPlanMatch && request.method === "PATCH") {
-    if (session.role !== "sales") {
-      sendJson(response, 403, { error: "Akses data lead hanya untuk sales." });
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
       return;
     }
     try {
@@ -1133,14 +1477,17 @@ export async function handleRequest(request, response) {
         sendJson(response, 400, { error: "Status rencana visit harus berupa centang atau tidak dicentang." });
         return;
       }
-      const lead = (await listSalesLeads(session.salesId))
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const lead = (await listSalesLeads(ownerId, session.role))
         .find((item) => item.id === decodeURIComponent(visitPlanMatch[1]));
       if (!lead) {
         sendJson(response, 404, { error: "Lead tidak ditemukan." });
         return;
       }
       if (sheetsEnabled) {
-        const account = await findSalesAccountById(session.salesId);
+        const account = session.role === "leader"
+          ? await findMarketingLeaderById(ownerId)
+          : await findSalesAccountById(ownerId);
         if (!account) {
           sendJson(response, 404, { error: "Akun sales tidak ditemukan." });
           return;
@@ -1155,7 +1502,7 @@ export async function handleRequest(request, response) {
       }
       lead.visitBooked = input.visitBooked;
       lead.visitPlannedAt = input.visitBooked ? new Date().toISOString() : "";
-      sendJson(response, 200, { lead: await saveSalesLead(lead, null) });
+      sendJson(response, 200, { lead: await saveSalesLead(lead, null, session.role) });
     } catch (error) {
       sendRouteError(response, error, "Rencana visit tidak dapat diperbarui.");
     }
@@ -1164,8 +1511,8 @@ export async function handleRequest(request, response) {
 
   const followUpMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/follow-ups$/);
   if (followUpMatch && request.method === "POST") {
-    if (session.role !== "sales") {
-      sendJson(response, 403, { error: "Akses data lead hanya untuk sales." });
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
       return;
     }
     try {
@@ -1173,7 +1520,9 @@ export async function handleRequest(request, response) {
       const number = Number(input.number);
       const result = String(input.result || "").trim();
       const followUpDate = String(input.followUpDate || "");
-      const lead = (await listSalesLeads(session.salesId)).find((item) => item.id === decodeURIComponent(followUpMatch[1]));
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const lead = (await listSalesLeads(ownerId, session.role))
+        .find((item) => item.id === decodeURIComponent(followUpMatch[1]));
       if (!lead) {
         sendJson(response, 404, { error: "Lead tidak ditemukan." });
         return;
@@ -1202,7 +1551,7 @@ export async function handleRequest(request, response) {
         lead.followUps.push({ number, result, createdAt, followUpDate, late });
         lead.followUps.sort((left, right) => left.number - right.number);
       }
-      sendJson(response, 200, { lead: await saveSalesLead(lead, number) });
+      sendJson(response, 200, { lead: await saveSalesLead(lead, number, session.role) });
     } catch (error) {
       sendRouteError(response, error, "Data follow-up tidak valid.");
     }
@@ -1210,7 +1559,7 @@ export async function handleRequest(request, response) {
   }
 
   const asset = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-  if (!["index.html", "styles.css", "client.js", "visit-schedule.js", "follow-up-schedule.js"].includes(asset)) {
+  if (!["index.html", "styles.css", "client.js", "visit-schedule.js", "follow-up-schedule.js", "whatsapp-link.js"].includes(asset)) {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Not found");
     return;
