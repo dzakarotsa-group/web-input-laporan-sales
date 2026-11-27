@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "server.mjs": {
-      "includeFiles": "{index.html,styles.css,client.js,visit-schedule.js,follow-up-schedule.js,lead-indicator.js,whatsapp-link.js}"
+      "includeFiles": "{index.html,styles.css,client.js,visit-schedule.js,follow-up-schedule.js,lead-indicator.js,whatsapp-link.js,leader-dashboard.js}"
     }
   }
 }

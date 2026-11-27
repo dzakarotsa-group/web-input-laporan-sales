@@ -10,6 +10,7 @@ test("Vercel includes the modules required by the frontend and backend", async (
   assert.match(config.functions["server.mjs"].includeFiles, /follow-up-schedule\.js/);
   assert.match(config.functions["server.mjs"].includeFiles, /lead-indicator\.js/);
   assert.match(config.functions["server.mjs"].includeFiles, /whatsapp-link\.js/);
+  assert.match(config.functions["server.mjs"].includeFiles, /leader-dashboard\.js/);
 });
 
 test("existing sales sheet data is continued in place and kept separate per salesperson", async () => {
