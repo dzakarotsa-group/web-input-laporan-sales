@@ -268,6 +268,13 @@ test("existing sales sheet data is continued in place and kept separate per sale
     workbooks.get("test-spreadsheet").get("sales_accounts")[1][2] = "Siti@Example.com";
     workbooks.get("test-spreadsheet").get("sales_accounts")[1][6] = "TRUE";
     const salesCookie = await login(app.base, "sales", "siti@example.com", "654321");
+    result = await request(app.base, "/api/auth/session", { cookie: salesCookie });
+    assert.equal(result.response.status, 200);
+    assert.deepEqual(result.data.user, {
+      role: "sales",
+      name: "Siti",
+      email: "Siti@Example.com"
+    });
     const oldLeadId = "code:LD-LAMA:081234000111";
     result = await request(app.base, "/api/leads", { cookie: salesCookie });
     assert.equal(result.data.leads.length, 2);

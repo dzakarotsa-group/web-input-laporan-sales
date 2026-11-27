@@ -44,4 +44,4 @@ The backend creates these headers automatically when the tabs are empty:
 
 With no Google Sheets variables set, `npm start` runs a local demo using temporary sample data. This mode is not persistent and must not be used for real or online data. Install Node.js 22 or newer and open `http://127.0.0.1:4173`.
 
-The app hashes sales and leader passwords before storing them. Google service-account credentials stay on the backend. Keep the account-registry spreadsheet private because it contains password hashes; each sales spreadsheet can be shared only with its owner and the service account. Login cookies are signed and expire after eight hours.
+The app hashes sales and leader passwords before storing them. Google service-account credentials stay on the backend. Keep the account-registry spreadsheet private because it contains password hashes; each sales spreadsheet can be shared only with its owner and the service account. Signed login cookies keep users logged in across page refreshes and expire after eight hours or when they log out.

@@ -47,7 +47,11 @@ async function api(path, options = {}) {
     }
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Permintaan gagal.");
+  if (!response.ok) {
+    const error = new Error(data.error || "Permintaan gagal.");
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
@@ -1056,8 +1060,11 @@ api("/api/health").then(({ mode }) => {
     byId("login-footnote").textContent = "Mode demo lokal. Data akan terhapus saat server dimulai ulang.";
   }
   selectLoginRole(state.loginRole);
+  return api("/api/auth/session");
+}).then(({ user }) => {
+  enterWorkspace(user);
 }).catch((error) => {
-  setFormError("login-error", error.message);
+  if (error.status !== 401) setFormError("login-error", error.message);
 });
 
 renderFollowUpPicker();
