@@ -11,6 +11,7 @@ const state = {
   sales: [],
   marketingLeaders: [],
   salesTeams: [],
+  sourceOptions: [],
   user: null,
   loginRole: "sales",
   selectedFollowUp: 2,
@@ -66,6 +67,22 @@ function latestFollowUp(lead) {
       const timeDifference = Date.parse(b.createdAt || lead.createdAt) - Date.parse(a.createdAt || lead.createdAt);
       return timeDifference || b.number - a.number;
     })[0];
+}
+
+function renderFollowUpSummary(lead) {
+  const result = latestFollowUp(lead)?.result || lead.finalResult || "";
+  const label = result || "Belum ada hasil FU";
+  return `<td class="follow-up-summary"><strong>${safeText(lastActivity(lead))}</strong><small title="${safeText(label)}">${safeText(label)}</small></td>`;
+}
+
+function renderSourceOptions(selectId, selectedValue = "") {
+  const select = byId(selectId);
+  const options = [...state.sourceOptions];
+  if (selectedValue && !options.includes(selectedValue)) options.push(selectedValue);
+  select.innerHTML = `<option value="">Pilih sumber leads</option>${options.map((option) =>
+    `<option value="${safeText(option)}">${safeText(option)}</option>`
+  ).join("")}`;
+  select.value = selectedValue;
 }
 
 function dateAfter(dateValue, days) {
@@ -196,7 +213,7 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       <td>${renderVisitToggle(lead)}</td>
       <td>${renderVisitCompletedToggle(lead)}</td>
       <td>${renderClosingButton(lead)}</td>
-      <td>${safeText(lastActivity(lead))}</td>
+      ${renderFollowUpSummary(lead)}
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
       <td>${actions}</td>
     </tr>`;
@@ -770,9 +787,9 @@ document.addEventListener("click", (event) => {
     byId("edit-lead-name").value = lead.nameUser;
     byId("edit-lead-phone").value = lead.phone;
     byId("edit-lead-domicile").value = lead.domicile || "";
-    byId("edit-lead-source").value = lead.source || "";
+    renderSourceOptions("edit-lead-source", lead.source || "");
     byId("edit-lead-code").value = lead.leadCode || "";
-    byId("edit-lead-tahap").value = lead.tahap || "Tanya-Tanya";
+    byId("edit-lead-tahap").value = lead.tahap || "Komunikasi";
     byId("edit-lead-catatan").value = lead.catatan || "";
     setFormError("edit-lead-error", "");
     byId("edit-lead-modal").showModal();
@@ -1060,6 +1077,12 @@ api("/api/health").then(({ mode }) => {
     byId("login-footnote").textContent = "Mode demo lokal. Data akan terhapus saat server dimulai ulang.";
   }
   selectLoginRole(state.loginRole);
+  return api("/api/crm/options");
+}).then(({ sumber }) => {
+  if (!Array.isArray(sumber)) throw new Error("Opsi sumber leads tidak dapat dimuat.");
+  state.sourceOptions = sumber;
+  renderSourceOptions("lead-source");
+  renderSourceOptions("edit-lead-source");
   return api("/api/auth/session");
 }).then(({ user }) => {
   enterWorkspace(user);

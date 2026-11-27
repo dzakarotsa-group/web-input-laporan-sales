@@ -42,9 +42,10 @@ const sheetHeaders = {
   leads: ["id", "name_user", "phone", "owner_id", "sales_name", "domicile", "source", "lead_code", "indicator", "created_at", "final_result", "follow_ups", "visit_booked", "visit_completed", "block_booking", "status"]
 };
 const CRM_STATUS_OPTIONS = ["Cold", "Warm", "Hot", "Closing"];
-const CRM_TAHAP_OPTIONS = ["Tanya-Tanya", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
+const CRM_TAHAP_OPTIONS = ["Komunikasi", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
 const CRM_SUMBER_OPTIONS = ["Meta Ads", "Tiktok", "Instagram", "Banner", "Poster", "Lihat Langsung"];
 const TAHAP_TO_STATUS_MAP = {
+  "Komunikasi": "Cold",
   "Tanya-Tanya": "Cold",
   "Janji Survey": "Warm",
   "Survey": "Hot",
@@ -54,7 +55,7 @@ const TAHAP_TO_STATUS_MAP = {
 const FU_KEYWORD_TO_TAHAP = [
   ["batal", "Batal"], ["akad", "Akad"], ["itj", "ITJ"],
   ["janji survey", "Janji Survey"], ["survey", "Survey"],
-  ["tanya-tanya", "Tanya-Tanya"], ["tanya tanya", "Tanya-Tanya"], ["tanya", "Tanya-Tanya"]
+  ["tanya-tanya", "Komunikasi"], ["tanya tanya", "Komunikasi"], ["tanya", "Komunikasi"]
 ];
 const crmTargets = {
   leadsHarian: 0,
@@ -598,9 +599,10 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
     }
   }
   const tahapValue = String(get(schema.columns.tahap)).trim();
-  const tahap = CRM_TAHAP_OPTIONS.includes(tahapValue)
-    ? tahapValue
-    : "Tanya-Tanya";
+  const normalizedTahap = tahapValue === "Tanya-Tanya" ? "Komunikasi" : tahapValue;
+  const tahap = CRM_TAHAP_OPTIONS.includes(normalizedTahap)
+    ? normalizedTahap
+    : "Komunikasi";
   const statusValue = String(get(schema.columns.status)).trim();
   return {
     id: spreadsheetLeadId(row, rowNumber, schema.columns),
@@ -1412,10 +1414,10 @@ export async function handleRequest(request, response) {
         leadCode: String(input.leadCode || "").trim(),
         tahap: CRM_TAHAP_OPTIONS.includes(String(input.tahap || "").trim())
           ? String(input.tahap).trim()
-          : "Tanya-Tanya",
+          : "Komunikasi",
         status: TAHAP_TO_STATUS_MAP[CRM_TAHAP_OPTIONS.includes(String(input.tahap || "").trim())
           ? String(input.tahap).trim()
-          : "Tanya-Tanya"] || "Cold",
+          : "Komunikasi"] || "Cold",
         createdAt,
         finalResult: "",
         followUps: [{

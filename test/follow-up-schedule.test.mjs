@@ -38,7 +38,7 @@ test("uses the Jakarta date when a follow-up has only a timestamp", () => {
 test("starts FU 2 at H+3 and advances to H+5 after it is completed", () => {
   const lead = {
     createdAt: "2026-11-01T04:00:00.000Z",
-    tahap: "Tanya-Tanya",
+    tahap: "Komunikasi",
     followUps: [{ number: 1, result: "Lead masuk" }]
   };
 

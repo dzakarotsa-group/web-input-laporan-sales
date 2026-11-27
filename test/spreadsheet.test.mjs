@@ -187,6 +187,10 @@ test("existing sales sheet data is continued in place and kept separate per sale
     let result = await request(app.base, "/api/health");
     assert.equal(result.data.mode, "spreadsheet");
     assert.equal(result.data.connectedToSpreadsheet, true);
+    result = await request(app.base, "/api/crm/options");
+    assert.ok(result.data.tahap.includes("Komunikasi"));
+    assert.equal(result.data.tahap.includes("Tanya-Tanya"), false);
+    assert.deepEqual(result.data.sumber, ["Meta Ads", "Tiktok", "Instagram", "Banner", "Poster", "Lihat Langsung"]);
 
     const adminCookie = await login(app.base, "admin", "admin@example.com", "123456");
     result = await request(app.base, "/api/admin/sales", {
@@ -377,6 +381,7 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(result.response.status, 201, JSON.stringify(result.data));
     const leadId = result.data.lead.id;
     assert.equal(result.data.lead.followUps[0].late, true);
+    assert.equal(result.data.lead.tahap, "Komunikasi");
 
     result = await request(app.base, `/api/leads/${leadId}`, {
       method: "PATCH",

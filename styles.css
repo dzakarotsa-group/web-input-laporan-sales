@@ -151,6 +151,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .user-info strong, .user-info small { display: block; }
 .user-info strong { color: #363d4d; font-size: 10px; font-weight: 700; }
 .user-info small { margin-top: 4px; color: #a0a6b1; font-size: 9px; }
+.follow-up-summary { max-width: 230px; }
+.follow-up-summary strong, .follow-up-summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.follow-up-summary strong { color: #626b7c; font-size: 10px; }
+.follow-up-summary small { max-width: 220px; margin-top: 4px; color: #9098a8; font-size: 9px; }
 .source-pill { display: inline-flex; padding: 4px 7px; border-radius: 6px; color: #6c71c8; background: #f2f2ff; font-size: 9px; }
 .indicator-pill { display: inline-flex; padding: 4px 8px; border-radius: 10px; font-size: 9px; font-weight: 700; }
 .indicator-cold { color: #1762a5; background: #e8f2fd; }
