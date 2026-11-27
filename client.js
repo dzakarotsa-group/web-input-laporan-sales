@@ -18,12 +18,14 @@ const state = {
   activePage: "overview",
   activeTeamId: null,
   leadFilter: "all",
+  leadPage: 0,
   storageMode: "demo",
   editingLeadId: null,
   editingClosingLeadId: null,
   editingLeaderId: null
 };
 const API_REQUEST_TIMEOUT_MS = 90_000;
+const LEAD_PAGE_SIZE = 50;
 let appLoadingVisible = true;
 let requestSequence = 0;
 const activeRequests = new Map();
@@ -244,10 +246,16 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
     `${lead.nameUser} ${lead.phone} ${lead.domicile} ${lead.salesName || ""}`
       .toLocaleLowerCase("id").includes(normalizedQuery)
   );
+  const maxPage = Math.max(0, Math.ceil(filtered.length / LEAD_PAGE_SIZE) - 1);
+  if (!isOverview && state.leadPage > maxPage) state.leadPage = maxPage;
+  const pageStart = isOverview ? 0 : state.leadPage * LEAD_PAGE_SIZE;
+  const visibleLeads = isOverview
+    ? filtered
+    : filtered.slice(pageStart, pageStart + LEAD_PAGE_SIZE);
   const empty = byId(targetId === "leads-table-body" ? "empty-state" : "empty-state-all");
   const count = byId(targetId === "leads-table-body" ? "table-count" : "table-count-all");
 
-  body.innerHTML = filtered.map((lead, index) => {
+  body.innerHTML = visibleLeads.map((lead, index) => {
     const colors = ["avatar-indigo", "avatar-green", "avatar-amber"];
     const columns = includePhone ? `<td>${safeText(lead.phone)}</td>` : "";
     const displayName = String(lead.nameUser || "").trim() || String(lead.phone || "").trim();
@@ -284,7 +292,17 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
   count.textContent = isOverview
     ? `${filtered.length} lead${filtered.length === 1 ? "" : "s"} terbaru`
     : `${filtered.length} lead${filtered.length === 1 ? "" : "s"}`;
-  if (!isOverview) updateLeadFilterSummary();
+  if (!isOverview) {
+    const pagination = byId("lead-pagination");
+    const pageEnd = pageStart + visibleLeads.length;
+    pagination.classList.toggle("is-hidden", filtered.length === 0);
+    byId("lead-pagination-count").textContent =
+      `Menampilkan ${pageStart + 1}-${pageEnd} dari ${filtered.length.toLocaleString("id-ID")} leads`;
+    byId("previous-lead-page").disabled = state.leadPage === 0;
+    byId("next-lead-page").disabled = pageEnd >= filtered.length;
+    byId("lead-page-number").textContent = `Halaman ${state.leadPage + 1} dari ${maxPage + 1}`;
+    updateLeadFilterSummary();
+  }
 }
 
 function renderIndicator(value) {
@@ -497,8 +515,10 @@ function render() {
   renderMetrics();
   renderPriorityVisits();
   renderLeadRows("leads-table-body", byId("lead-search").value);
-  renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
-  renderLeadOptions();
+  if (state.activePage === "leads") {
+    renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
+  }
+  if (state.activePage === "follow-up") renderLeadOptions();
 }
 
 byId("today-date").textContent = new Intl.DateTimeFormat("id-ID", {
@@ -526,6 +546,7 @@ function showPage(page, teamId = null) {
       : !teamId && button.dataset.nav === page);
   });
   if (page === "overview" || page === "leads") render();
+  else if (page === "follow-up") renderLeadOptions();
 }
 
 function showToast(message, variant = "success") {
@@ -738,14 +759,15 @@ byId("login-form").addEventListener("submit", async (event) => {
 document.querySelectorAll("[data-lead-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     state.leadFilter = button.dataset.leadFilter;
+    state.leadPage = 0;
     byId("lead-search-all").value = "";
     showPage("leads", state.activeTeamId);
-    renderLeadRows("leads-table-all", "", true);
   });
 });
 
 byId("clear-lead-filter").addEventListener("click", () => {
   state.leadFilter = "all";
+  state.leadPage = 0;
   byId("lead-search-all").value = "";
   renderLeadRows("leads-table-all", "", true);
 });
@@ -753,12 +775,12 @@ byId("clear-lead-filter").addEventListener("click", () => {
 document.querySelectorAll("[data-nav]").forEach((button) => {
   button.addEventListener("click", () => {
     const teamId = button.hasAttribute("data-team-scope") ? state.activeTeamId : null;
-    showPage(button.dataset.nav, teamId);
     if (button.dataset.nav === "leads") {
       state.leadFilter = "all";
+      state.leadPage = 0;
       byId("lead-search-all").value = "";
-      renderLeadRows("leads-table-all", "", true);
     }
+    showPage(button.dataset.nav, teamId);
   });
 });
 
@@ -858,7 +880,18 @@ byId("follow-up-form").addEventListener("submit", async (event) => {
 });
 
 byId("lead-search").addEventListener("input", (event) => renderLeadRows("leads-table-body", event.target.value));
-byId("lead-search-all").addEventListener("input", (event) => renderLeadRows("leads-table-all", event.target.value, true));
+byId("lead-search-all").addEventListener("input", (event) => {
+  state.leadPage = 0;
+  renderLeadRows("leads-table-all", event.target.value, true);
+});
+byId("previous-lead-page").addEventListener("click", () => {
+  state.leadPage = Math.max(0, state.leadPage - 1);
+  renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
+});
+byId("next-lead-page").addEventListener("click", () => {
+  state.leadPage += 1;
+  renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
+});
 
 document.addEventListener("click", (event) => {
   const editAction = event.target.closest("[data-edit-lead]");
@@ -1178,7 +1211,10 @@ renderFollowUpPicker();
 window.setInterval(() => {
   if (!byId("app-shell").classList.contains("is-hidden")) {
     renderMetrics();
-    renderLeadRows("leads-table-body", byId("lead-search").value);
-    renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
+    if (state.activePage === "overview") {
+      renderLeadRows("leads-table-body", byId("lead-search").value);
+    } else if (state.activePage === "leads") {
+      renderLeadRows("leads-table-all", byId("lead-search-all").value, true);
+    }
   }
 }, 60_000);

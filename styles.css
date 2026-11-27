@@ -143,6 +143,11 @@ button { cursor: pointer; }
 .search-box input::placeholder { color: #adb3bd; }
 .table-count { color: #969dab; font-size: 10px; }
 .table-scroll { overflow-x: auto; }
+.table-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 11px 8px; }
+.table-pagination-count, .table-pagination-actions > span { color: #969dab; font-size: 10px; }
+.table-pagination-actions { display: flex; align-items: center; gap: 9px; }
+.table-pagination .button { min-height: 34px; padding: 0 11px; font-size: 10px; }
+.table-pagination .button:disabled { cursor: not-allowed; opacity: .5; }
 table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
 .lead-data-table { min-width: 1200px; }
 thead { border-top: 1px solid #f0f1f5; border-bottom: 1px solid #f0f1f5; background: #fbfbfd; }
@@ -360,6 +365,9 @@ select.input-control { appearance: auto; }
   .login-card h1 { font-size: 30px; }
   .topbar-actions { gap: 8px; }
   .request-progress-message { display: none; }
+  .table-pagination { align-items: flex-start; flex-direction: column; }
+  .table-pagination-actions { width: 100%; justify-content: space-between; gap: 5px; }
+  .table-pagination .button { padding: 0 8px; }
   .welcome-row { gap: 10px; }
   .welcome-row .eyebrow { font-size: 8px; }
   .welcome-row h1 { font-size: 20px; }
