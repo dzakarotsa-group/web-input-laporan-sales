@@ -142,6 +142,7 @@ button { cursor: pointer; }
 .table-count { color: #969dab; font-size: 10px; }
 .table-scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+.lead-data-table { min-width: 1200px; }
 thead { border-top: 1px solid #f0f1f5; border-bottom: 1px solid #f0f1f5; background: #fbfbfd; }
 th { height: 35px; padding: 0 11px; color: #9aa1ae; font-size: 9px; font-weight: 700; }
 td { height: 58px; padding: 8px 11px; border-bottom: 1px solid #f0f1f5; color: #626b7c; font-size: 10px; }
