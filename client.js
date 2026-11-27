@@ -4,15 +4,18 @@ import {
   hasFollowUpToday as leadHasFollowUpToday
 } from "./follow-up-schedule.js";
 import { whatsappChatUrl } from "./whatsapp-link.js";
+import { leadsForDashboard } from "./leader-dashboard.js";
 
 const state = {
   leads: [],
   sales: [],
   marketingLeaders: [],
+  salesTeams: [],
   user: null,
   loginRole: "sales",
   selectedFollowUp: 2,
   activePage: "overview",
+  activeTeamId: null,
   leadFilter: "all",
   storageMode: "demo",
   editingLeadId: null,
@@ -104,7 +107,7 @@ function lastActivity(lead) {
 }
 
 function displayableLeads() {
-  return state.leads.filter((lead) =>
+  return leadsForDashboard(state.leads, state.user?.role, state.activeTeamId).filter((lead) =>
     String(lead.nameUser || "").trim() && String(lead.phone || "").trim()
   );
 }
@@ -374,6 +377,22 @@ function formatDate(value) {
 }
 
 function render() {
+  const activeTeam = state.salesTeams.find((team) => team.id === state.activeTeamId);
+  byId("welcome-heading").innerHTML = activeTeam
+    ? safeText(`Tim Sales (${activeTeam.name})`)
+    : `Hai, <span id="welcome-name">${safeText(state.user?.name || "Anisa")}</span> <span class="wave" aria-hidden="true">✦</span>`;
+  byId("overview-page").querySelector(".welcome-row .muted").textContent = activeTeam
+    ? `Ringkasan leads dan aktivitas sales ${activeTeam.name}.`
+    : state.user?.role === "leader"
+      ? "Ringkasan khusus leads milikmu. Pilih tim sales untuk melihat dashboard terpisah."
+      : "Pantau leads dan tindak lanjutmu hari ini.";
+  document.querySelectorAll('[data-nav="leads"]').forEach((button) => {
+    if (activeTeam) button.dataset.teamScope = "true";
+    else delete button.dataset.teamScope;
+  });
+  document.querySelectorAll("[data-open-form='new-lead']").forEach((button) => {
+    button.classList.toggle("is-hidden", state.user?.role === "leader" && Boolean(activeTeam));
+  });
   renderMetrics();
   renderPriorityVisits();
   renderLeadRows("leads-table-body", byId("lead-search").value);
@@ -388,16 +407,24 @@ byId("today-date").textContent = new Intl.DateTimeFormat("id-ID", {
   year: "numeric"
 }).format(new Date()).toLocaleUpperCase("id");
 
-function showPage(page) {
+function showPage(page, teamId = null) {
+  state.activeTeamId = teamId;
+  const activeTeam = state.salesTeams.find((team) => team.id === teamId);
   const labels = { overview: "Ringkasan", leads: "Data leads", "follow-up": "Follow-up", admin: "Kelola sales" };
   state.activePage = page;
   for (const [id, key] of [["overview-page", "overview"], ["leads-page", "leads"], ["follow-up-page", "follow-up"], ["admin-page", "admin"]]) {
     byId(id).classList.toggle("is-hidden", page !== key);
   }
-  byId("breadcrumb-current").textContent = labels[page];
+  byId("breadcrumb-current").textContent = activeTeam
+    ? `Tim Sales (${activeTeam.name}) / ${labels[page] || labels.overview}`
+    : labels[page];
   document.querySelectorAll("[data-nav]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.nav === page);
+    const isTeam = button.hasAttribute("data-team-id");
+    button.classList.toggle("is-active", isTeam
+      ? button.dataset.teamId === teamId
+      : !teamId && button.dataset.nav === page);
   });
+  if (page === "overview" || page === "leads") render();
 }
 
 function showToast(message) {
@@ -417,7 +444,23 @@ function setFormError(id, message) {
 async function loadLeads() {
   const data = await api("/api/leads");
   state.leads = data.leads;
+  state.salesTeams = data.teams || [];
+  renderLeaderTeamNav();
   render();
+}
+
+function renderLeaderTeamNav() {
+  const markup = state.salesTeams.map((team) =>
+    `<button class="nav-item" data-nav="team" data-team-id="${safeText(team.id)}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1M17 5.5a3.5 3.5 0 0 1 0 6.8M18 14a5 5 0 0 1 3 4.6V20"/></svg><span>Tim Sales (${safeText(team.name)})</span></button>`
+  ).join("");
+  const mobileMarkup = state.salesTeams.map((team) =>
+    `<button class="mobile-nav-item" data-nav="team" data-team-id="${safeText(team.id)}" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/></svg><span>Tim Sales (${safeText(team.name)})</span></button>`
+  ).join("");
+  byId("leader-team-nav").innerHTML = markup;
+  byId("mobile-leader-team-nav").innerHTML = mobileMarkup;
+  const showTeams = state.user?.role === "leader" && state.salesTeams.length > 0;
+  byId("leader-team-nav").classList.toggle("is-hidden", !showTeams);
+  byId("mobile-leader-team-nav").classList.toggle("is-hidden", !showTeams);
 }
 
 function renderSalesAccounts() {
@@ -489,7 +532,7 @@ function enterWorkspace(user) {
     : user.role === "leader" ? "Leader marketing" : user.email;
   byId("welcome-name").textContent = user.name;
   byId("overview-page").querySelector(".muted").textContent = user.role === "leader"
-    ? "Kelola leads milikmu dan pantau leads sales yang ditugaskan."
+    ? "Ringkasan khusus leads milikmu. Pilih tim sales untuk melihat dashboard terpisah."
     : "Pantau leads dan tindak lanjutmu hari ini.";
 
   const isAdmin = user.role === "admin";
@@ -510,6 +553,7 @@ function enterWorkspace(user) {
     banner.classList.toggle("is-hidden", state.storageMode === "spreadsheet");
   });
   byId("mode-label").textContent = state.storageMode === "spreadsheet" ? " GOOGLE SHEETS" : " DEMO LOKAL";
+  renderLeaderTeamNav();
   if (isAdmin) {
     showPage("admin");
     loadSalesAccounts().catch((error) => showToast(error.message));
@@ -574,7 +618,7 @@ document.querySelectorAll("[data-lead-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     state.leadFilter = button.dataset.leadFilter;
     byId("lead-search-all").value = "";
-    showPage("leads");
+    showPage("leads", state.activeTeamId);
     renderLeadRows("leads-table-all", "", true);
   });
 });
@@ -587,13 +631,23 @@ byId("clear-lead-filter").addEventListener("click", () => {
 
 document.querySelectorAll("[data-nav]").forEach((button) => {
   button.addEventListener("click", () => {
+    const teamId = button.hasAttribute("data-team-scope") ? state.activeTeamId : null;
+    showPage(button.dataset.nav, teamId);
     if (button.dataset.nav === "leads") {
       state.leadFilter = "all";
       byId("lead-search-all").value = "";
       renderLeadRows("leads-table-all", "", true);
     }
-    showPage(button.dataset.nav);
   });
+});
+
+document.addEventListener("click", (event) => {
+  const teamButton = event.target.closest("[data-team-id]");
+  if (!teamButton) return;
+  byId("lead-search").value = "";
+  byId("lead-search-all").value = "";
+  state.leadFilter = "all";
+  showPage("overview", teamButton.dataset.teamId);
 });
 
 document.querySelectorAll("[data-open-form='new-lead']").forEach((button) => {
@@ -779,6 +833,8 @@ byId("logout-button").addEventListener("click", async () => {
   state.leads = [];
   state.sales = [];
   state.marketingLeaders = [];
+  state.salesTeams = [];
+  state.activeTeamId = null;
   byId("app-shell").classList.remove("is-admin", "is-leader");
   byId("app-shell").classList.add("is-hidden");
   byId("login-view").classList.remove("is-hidden");

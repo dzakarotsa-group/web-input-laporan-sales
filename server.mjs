@@ -1357,6 +1357,7 @@ export async function handleRequest(request, response) {
             isOwnLead: false
           }))
         ],
+        teams: sales.map(({ id, name }) => ({ id, name })),
         role: "leader"
       });
       return;
