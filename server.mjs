@@ -44,6 +44,7 @@ const sheetHeaders = {
 const CRM_STATUS_OPTIONS = ["Cold", "Warm", "Hot", "Closing"];
 const CRM_TAHAP_OPTIONS = ["Komunikasi", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
 const CRM_SUMBER_OPTIONS = ["FB Ads", "FBMP", "Tiktok", "Instagram", "OTS", "MITRA", "Brosur", "BANER JALAN", "Tiktok Live", "Organik"];
+const GOOGLE_REQUEST_TIMEOUT_MS = 20_000;
 const TAHAP_TO_STATUS_MAP = {
   "Komunikasi": "Cold",
   "Tanya-Tanya": "Cold",
@@ -230,6 +231,21 @@ function base64Url(value) {
   return Buffer.from(value).toString("base64url");
 }
 
+async function fetchJsonWithTimeout(url, options, timeoutMessage) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GOOGLE_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const data = response.status === 204 ? {} : await response.json();
+    return { response, data };
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(timeoutMessage);
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function getSheetsAccessToken() {
   if (sheetsAccessToken && sheetsAccessTokenExpiresAt > Date.now() + 60_000) {
     return sheetsAccessToken;
@@ -246,15 +262,14 @@ async function getSheetsAccessToken() {
   const unsignedToken = `${header}.${claims}`;
   const signature = createSign("RSA-SHA256").update(unsignedToken).sign(serviceAccount.private_key, "base64url");
   const assertion = `${unsignedToken}.${signature}`;
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  const { response, data } = await fetchJsonWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion
     })
-  });
-  const data = await response.json();
+  }, "Autentikasi Google melewati batas waktu.");
   if (!response.ok || !data.access_token) {
     throw new Error(`Google Sheets request failed: ${data.error_description || data.error || "Autentikasi Google gagal."}`);
   }
@@ -267,15 +282,14 @@ async function sheetsRequest(path, options = {}, targetSpreadsheetId = accountsS
   try {
     const token = await getSheetsAccessToken();
     const suffix = path.startsWith(":") || path.startsWith("?") ? path : `/${path}`;
-    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(targetSpreadsheetId)}${suffix}`, {
+    const { response, data } = await fetchJsonWithTimeout(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(targetSpreadsheetId)}${suffix}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
         ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...options.headers
       }
-    });
-    const data = response.status === 204 ? {} : await response.json();
+    }, "Google Sheets tidak merespons dalam 20 detik.");
     if (!response.ok) {
       throw new Error(data.error?.message || `Google Sheets mengembalikan HTTP ${response.status}.`);
     }

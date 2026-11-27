@@ -90,6 +90,10 @@
         <header class="topbar">
           <div class="breadcrumbs"><span>Workspace</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Ringkasan</strong></div>
           <div class="topbar-actions">
+            <span class="request-progress is-hidden" id="request-progress" role="status" aria-live="polite" aria-busy="false">
+              <span class="request-progress-spinner" aria-hidden="true"></span>
+              <span id="request-progress-message">Memuat data...</span>
+            </span>
             <span class="preview-pill" id="mode-label"><span class="status-dot"></span> DEMO</span>
             <button class="icon-button" id="help-button" aria-label="Info preview" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.4 1.6c-1.1 1-2 1.4-2 3M12 17h.01"/></svg>

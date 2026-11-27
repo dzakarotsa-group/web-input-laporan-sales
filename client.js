@@ -23,6 +23,10 @@ const state = {
   editingClosingLeadId: null,
   editingLeaderId: null
 };
+const API_REQUEST_TIMEOUT_MS = 90_000;
+let appLoadingVisible = true;
+let requestSequence = 0;
+const activeRequests = new Map();
 const leadFilterLabels = {
   month: "Leads bulan ini",
   due: "Perlu follow-up",
@@ -40,33 +44,78 @@ const safeText = (value) => String(value ?? "").replace(/[&<>"']/g, (character) 
 })[character]);
 
 function setAppLoading(message) {
+  appLoadingVisible = true;
   const overlay = byId("loading-overlay");
   byId("loading-message").textContent = message;
   overlay.classList.remove("is-hidden");
   overlay.setAttribute("aria-busy", "true");
+  updateRequestProgress();
 }
 
 function clearAppLoading() {
+  appLoadingVisible = false;
   const overlay = byId("loading-overlay");
   overlay.classList.add("is-hidden");
   overlay.setAttribute("aria-busy", "false");
+  updateRequestProgress();
+}
+
+function requestLoadingMessage(path) {
+  if (path === "/api/leads") {
+    return state.storageMode === "spreadsheet"
+      ? "Membaca leads dari Google Sheets..."
+      : "Memuat data leads...";
+  }
+  if (path.startsWith("/api/admin/")) return "Memuat data akun...";
+  if (path.startsWith("/api/auth/")) return "Memeriksa akun...";
+  if (path === "/api/crm/options") return "Menyiapkan pilihan...";
+  return "Menyimpan perubahan...";
+}
+
+function updateRequestProgress() {
+  const progress = byId("request-progress");
+  if (appLoadingVisible || activeRequests.size === 0) {
+    progress.classList.add("is-hidden");
+    progress.setAttribute("aria-busy", "false");
+    return;
+  }
+  byId("request-progress-message").textContent = Array.from(activeRequests.values()).pop();
+  progress.classList.remove("is-hidden");
+  progress.setAttribute("aria-busy", "true");
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const requestId = ++requestSequence;
+  activeRequests.set(requestId, requestLoadingMessage(path));
+  updateRequestProgress();
+  try {
+    const response = await fetch(path, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers
+      }
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const error = new Error(data.error || "Permintaan gagal.");
+      error.status = response.status;
+      throw error;
     }
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    const error = new Error(data.error || "Permintaan gagal.");
-    error.status = response.status;
+    return data;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("Server terlalu lama merespons. Periksa koneksi Google Sheets, lalu coba lagi.");
+    }
     throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    activeRequests.delete(requestId);
+    updateRequestProgress();
   }
-  return data;
 }
 
 function initials(name) {
@@ -479,9 +528,9 @@ function showPage(page, teamId = null) {
   if (page === "overview" || page === "leads") render();
 }
 
-function showToast(message) {
+function showToast(message, variant = "success") {
   const toast = document.createElement("div");
-  toast.className = "toast";
+  toast.className = `toast${variant === "error" ? " toast-error" : ""}`;
   toast.textContent = message;
   byId("toast-region").append(toast);
   window.setTimeout(() => toast.remove(), 3200);
@@ -493,10 +542,12 @@ function setFormError(id, message) {
   error.classList.toggle("is-hidden", !message);
 }
 
-async function loadLeads() {
-  setAppLoading(state.storageMode === "spreadsheet"
-    ? "Membaca leads dari Google Sheets..."
-    : "Memuat data leads...");
+async function loadLeads({ blocking = false } = {}) {
+  if (blocking) {
+    setAppLoading(state.storageMode === "spreadsheet"
+      ? "Membaca leads dari Google Sheets..."
+      : "Memuat data leads...");
+  }
   try {
     const data = await api("/api/leads");
     state.leads = data.leads;
@@ -504,7 +555,7 @@ async function loadLeads() {
     renderLeaderTeamNav();
     render();
   } finally {
-    clearAppLoading();
+    if (blocking) clearAppLoading();
   }
 }
 
@@ -568,10 +619,12 @@ function renderMarketingLeaders() {
   }).join("");
 }
 
-async function loadSalesAccounts() {
-  setAppLoading(state.storageMode === "spreadsheet"
-    ? "Membaca akun sales dan leader dari Google Sheets..."
-    : "Memuat data akun...");
+async function loadSalesAccounts({ blocking = false } = {}) {
+  if (blocking) {
+    setAppLoading(state.storageMode === "spreadsheet"
+      ? "Membaca akun sales dan leader dari Google Sheets..."
+      : "Memuat data akun...");
+  }
   try {
     const data = await api("/api/admin/sales");
     state.sales = data.sales;
@@ -581,11 +634,11 @@ async function loadSalesAccounts() {
     state.marketingLeaders = leaders.leaders;
     renderMarketingLeaders();
   } finally {
-    clearAppLoading();
+    if (blocking) clearAppLoading();
   }
 }
 
-function enterWorkspace(user) {
+function enterWorkspace(user, initialLoad = false) {
   state.user = user;
   byId("login-view").classList.add("is-hidden");
   byId("app-shell").classList.remove("is-hidden");
@@ -622,10 +675,10 @@ function enterWorkspace(user) {
   renderLeaderTeamNav();
   if (isAdmin) {
     showPage("admin");
-    loadSalesAccounts().catch((error) => showToast(error.message));
+    loadSalesAccounts({ blocking: initialLoad }).catch((error) => showToast(error.message, "error"));
   } else {
     showPage("overview");
-    loadLeads().catch((error) => showToast(error.message));
+    loadLeads({ blocking: initialLoad }).catch((error) => showToast(error.message, "error"));
   }
 }
 
@@ -675,7 +728,7 @@ byId("login-form").addEventListener("submit", async (event) => {
         password: byId("login-password").value
       })
     });
-    enterWorkspace(user.user);
+    enterWorkspace(user.user, true);
   } catch (error) {
     clearAppLoading();
     setFormError("login-error", error.message);
@@ -1115,7 +1168,7 @@ api("/api/health").then(({ mode }) => {
   renderSourceOptions("edit-lead-source");
   return api("/api/auth/session");
 }).then(({ user }) => {
-  enterWorkspace(user);
+  enterWorkspace(user, true);
 }).catch((error) => {
   clearAppLoading();
   if (error.status !== 401) setFormError("login-error", error.message);
