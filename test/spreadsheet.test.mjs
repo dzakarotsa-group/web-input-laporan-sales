@@ -283,6 +283,12 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(undatedResult.createdAt, "");
     assert.equal(undatedResult.followUps[0].createdAt, "");
     assert.equal(hasFollowUpToday(undatedResult, dateInJakarta()), false);
+    result = await request(app.base, `/api/leads/${encodeURIComponent(undatedResult.id)}/visit-completed`, {
+      method: "PATCH",
+      cookie: salesCookie,
+      body: { visitCompleted: true }
+    });
+    assert.equal(result.response.status, 400);
 
     result = await request(app.base, `/api/leads/${oldLeadId}`, {
       method: "PATCH",
@@ -318,6 +324,31 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[0][26], "Tanggal Rencana Visit");
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][15], true);
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][26], result.data.lead.visitPlannedAt);
+
+    result = await request(app.base, `/api/leads/${oldLeadId}/visit-completed`, {
+      method: "PATCH",
+      cookie: salesCookie,
+      body: { visitCompleted: true }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.visitCompleted, true);
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian")[1][16], true);
+
+    result = await request(app.base, `/api/leads/${oldLeadId}/closing`, {
+      method: "PATCH",
+      cookie: salesCookie,
+      body: { blockBooking: "A-12" }
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.lead.status, "Closing");
+    assert.equal(result.data.lead.blockBooking, "A-12");
+    const updatedSalesSheet = workbooks.get("siti-sheet-id").get("Input Harian");
+    const blockBookingColumn = updatedSalesSheet[0].indexOf("Blok Booking");
+    const statusColumn = updatedSalesSheet[0].indexOf("Status");
+    assert.notEqual(blockBookingColumn, -1);
+    assert.notEqual(statusColumn, -1);
+    assert.equal(updatedSalesSheet[1][blockBookingColumn], "A-12");
+    assert.equal(updatedSalesSheet[1][statusColumn], "Closing");
 
     for (const body of [
       { nameUser: "Lead Nama Saja", phone: "", followUpDate: dateInJakarta() },
@@ -496,6 +527,9 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(existingLead.followUps[2].result, "FU lama diteruskan");
     assert.equal(existingLead.followUps.find((item) => item.number === 8).result, "FU terakhir terlambat");
     assert.equal(existingLead.visitBooked, true);
+    assert.equal(existingLead.visitCompleted, true);
+    assert.equal(existingLead.blockBooking, "A-12");
+    assert.equal(existingLead.status, "Closing");
     assert.equal(existingLead.visitPlannedAt, workbooks.get("siti-sheet-id").get("Input Harian")[1][26]);
     assert.equal(workbooks.get("siti-sheet-id").get("Input Harian").length, 6);
     assert.equal(workbooks.get("siti-sheet-id").has("leads"), false);

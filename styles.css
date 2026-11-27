@@ -186,6 +186,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .visit-toggle:hover:not(:disabled) { border-color: #b8b9ef; color: #585bd4; background: #f8f8ff; }
 .visit-toggle.is-checked { border-color: #b9e2cd; color: #28774f; background: #eef9f3; }
 .visit-toggle:disabled { cursor: not-allowed; opacity: .6; }
+.closing-button { min-height: 32px; padding: 0 10px; font-size: 9px; white-space: nowrap; }
+.closing-button:disabled { cursor: not-allowed; opacity: .6; }
 .visit-checkmark { display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; line-height: 1; }
 .visit-toggle.is-checked .visit-checkmark { border-color: transparent; background: rgba(40, 119, 79, .1); }
 .lead-filter-tools { display: flex; align-items: center; gap: 8px; color: #686ade; font-size: 9px; }

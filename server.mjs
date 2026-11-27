@@ -39,7 +39,7 @@ const leadTableCache = new Map();
 const sheetHeaders = {
   sales_accounts: ["id", "name", "email", "password_salt", "password_hash", "spreadsheet_url", "is_active", "created_at"],
   marketing_leaders: ["id", "name", "email", "password_salt", "password_hash", "sales_ids", "is_active", "created_at", "spreadsheet_url"],
-  leads: ["id", "name_user", "phone", "owner_id", "sales_name", "domicile", "source", "lead_code", "indicator", "created_at", "final_result", "follow_ups", "visit_booked", "visit_completed"]
+  leads: ["id", "name_user", "phone", "owner_id", "sales_name", "domicile", "source", "lead_code", "indicator", "created_at", "final_result", "follow_ups", "visit_booked", "visit_completed", "block_booking", "status"]
 };
 const CRM_STATUS_OPTIONS = ["Cold", "Warm", "Hot", "Closing"];
 const CRM_TAHAP_OPTIONS = ["Tanya-Tanya", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
@@ -427,6 +427,7 @@ const leadHeaderAliases = {
   leadCode: ["kodelead", "kodeleads", "leadcode"],
   visitBooked: ["rencanavisit", "bookingvisit", "bookedvisit", "visitbooked"],
   visitCompleted: ["visitterlaksana", "sudahterlaksana", "visitdone", "visitcompleted"],
+  blockBooking: ["blokbooking", "bookingblock", "blockbooking", "bookedblock"],
   visitDate: ["tanggalvisit", "visitdate", "jadwalvisit"],
   visitPlannedAt: ["tanggalrencanavisit", "wakturencanavisit", "visitplannedat", "waktucentangvisit"],
   createdAt: ["tanggal", "tanggallead", "tanggalmasuk", "createdat", "date", "column1"],
@@ -497,19 +498,23 @@ async function findLeadTable(targetSpreadsheetId) {
   return discovery;
 }
 
-async function ensureVisitPlannedAtColumn(table, targetSpreadsheetId) {
-  if (table.columns.visitPlannedAt !== undefined) return;
+async function ensureLeadColumn(table, field, title, targetSpreadsheetId) {
+  if (table.columns[field] !== undefined) return;
   const column = table.headers.length;
   if (column >= 52) {
-    throw new Error("Google Sheets request failed: Tidak ada ruang kolom untuk mencatat waktu rencana visit.");
+    throw new Error(`Google Sheets request failed: Tidak ada ruang kolom untuk menambahkan ${title}.`);
   }
   const range = `${quoteSheetTitle(table.title)}!${columnName(column)}${table.headerRow}`;
   await sheetsRequest(`values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
     method: "PUT",
-    body: JSON.stringify({ values: [["Tanggal Rencana Visit"]] })
+    body: JSON.stringify({ values: [[title]] })
   }, targetSpreadsheetId);
-  table.headers.push("Tanggal Rencana Visit");
-  table.columns.visitPlannedAt = column;
+  table.headers.push(title);
+  table.columns[field] = column;
+}
+
+async function ensureVisitPlannedAtColumn(table, targetSpreadsheetId) {
+  await ensureLeadColumn(table, "visitPlannedAt", "Tanggal Rencana Visit", targetSpreadsheetId);
 }
 
 function spreadsheetDate(value) {
@@ -615,6 +620,7 @@ function leadFromSpreadsheetRow(row, rowNumber, schema, ownerId, salesName) {
     indicator: String(get(schema.columns.indicator)).trim(),
     visitBooked: spreadsheetFlag(get(schema.columns.visitBooked)) || Boolean(spreadsheetDate(get(schema.columns.visitDate))),
     visitCompleted: spreadsheetFlag(get(schema.columns.visitCompleted)),
+    blockBooking: String(get(schema.columns.blockBooking)).trim(),
     visitDate: spreadsheetDate(get(schema.columns.visitDate)),
     visitPlannedAt: String(get(schema.columns.visitPlannedAt)),
     visitAvailable: schema.columns.visitBooked !== undefined,
@@ -869,6 +875,8 @@ async function createSalesLead(lead, ownerRole = "sales") {
   set("status", lead.status);
   set("tahap", lead.tahap);
   set("visitBooked", false);
+  set("visitCompleted", false);
+  set("blockBooking", "");
   set("visitPlannedAt", "");
   set("createdAt", spreadsheetDateValue(todayLocal()));
   set("ownerId", lead.ownerId);
@@ -926,7 +934,7 @@ async function saveSalesLead(lead, followUpNumber, ownerRole = "sales") {
   if (followUpNumber === null) {
     for (const field of [
       "nameUser", "phone", "domicile", "source", "leadCode", "catatan",
-      "status", "tahap", "visitBooked", "visitPlannedAt"
+      "status", "tahap", "visitBooked", "visitCompleted", "visitPlannedAt", "blockBooking"
     ]) {
       addUpdate(table.columns[field], lead[field]);
     }
@@ -1502,10 +1510,96 @@ export async function handleRequest(request, response) {
         await ensureVisitPlannedAtColumn(table, targetSpreadsheetId);
       }
       lead.visitBooked = input.visitBooked;
+      if (!input.visitBooked) lead.visitCompleted = false;
       lead.visitPlannedAt = input.visitBooked ? new Date().toISOString() : "";
       sendJson(response, 200, { lead: await saveSalesLead(lead, null, session.role) });
     } catch (error) {
       sendRouteError(response, error, "Rencana visit tidak dapat diperbarui.");
+    }
+    return;
+  }
+
+  const visitCompletedMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/visit-completed$/);
+  if (visitCompletedMatch && request.method === "PATCH") {
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
+      return;
+    }
+    try {
+      const input = await readJson(request);
+      if (typeof input.visitCompleted !== "boolean") {
+        sendJson(response, 400, { error: "Status visit terlaksana harus berupa centang atau tidak dicentang." });
+        return;
+      }
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const lead = (await listSalesLeads(ownerId, session.role))
+        .find((item) => item.id === decodeURIComponent(visitCompletedMatch[1]));
+      if (!lead) {
+        sendJson(response, 404, { error: "Lead tidak ditemukan." });
+        return;
+      }
+      if (input.visitCompleted && !lead.visitBooked) {
+        sendJson(response, 400, { error: "Buat Rencana Visit terlebih dahulu." });
+        return;
+      }
+      if (sheetsEnabled) {
+        const account = session.role === "leader"
+          ? await findMarketingLeaderById(ownerId)
+          : await findSalesAccountById(ownerId);
+        if (!account) {
+          sendJson(response, 404, { error: "Akun sales tidak ditemukan." });
+          return;
+        }
+        const targetSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+        const table = await findLeadTable(targetSpreadsheetId);
+        await ensureLeadColumn(table, "visitCompleted", "Visit Terlaksana", targetSpreadsheetId);
+      }
+      lead.visitCompleted = input.visitCompleted;
+      sendJson(response, 200, { lead: await saveSalesLead(lead, null, session.role) });
+    } catch (error) {
+      sendRouteError(response, error, "Status visit tidak dapat diperbarui.");
+    }
+    return;
+  }
+
+  const closingMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/closing$/);
+  if (closingMatch && request.method === "PATCH") {
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
+      return;
+    }
+    try {
+      const input = await readJson(request);
+      const blockBooking = String(input.blockBooking || "").trim();
+      if (!blockBooking || blockBooking.length > 100) {
+        sendJson(response, 400, { error: "Isi blok booking maksimal 100 karakter." });
+        return;
+      }
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const lead = (await listSalesLeads(ownerId, session.role))
+        .find((item) => item.id === decodeURIComponent(closingMatch[1]));
+      if (!lead) {
+        sendJson(response, 404, { error: "Lead tidak ditemukan." });
+        return;
+      }
+      if (sheetsEnabled) {
+        const account = session.role === "leader"
+          ? await findMarketingLeaderById(ownerId)
+          : await findSalesAccountById(ownerId);
+        if (!account) {
+          sendJson(response, 404, { error: "Akun sales tidak ditemukan." });
+          return;
+        }
+        const targetSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+        const table = await findLeadTable(targetSpreadsheetId);
+        await ensureLeadColumn(table, "blockBooking", "Blok Booking", targetSpreadsheetId);
+        await ensureLeadColumn(table, "status", "Status", targetSpreadsheetId);
+      }
+      lead.blockBooking = blockBooking;
+      lead.status = "Closing";
+      sendJson(response, 200, { lead: await saveSalesLead(lead, null, session.role) });
+    } catch (error) {
+      sendRouteError(response, error, "Data closing tidak dapat disimpan.");
     }
     return;
   }

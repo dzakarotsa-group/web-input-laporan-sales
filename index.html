@@ -172,7 +172,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Indikator</th><th>Status</th><th>Aksi</th></tr></thead>
+                <thead><tr><th>Nama user</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Visit terlaksana</th><th>Closing</th><th>Follow-up terakhir</th><th>Indikator</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody id="leads-table-body"></tbody>
               </table>
               <div class="empty-state is-hidden" id="empty-state">
@@ -197,7 +197,7 @@
               <span class="table-count" id="table-count-all">3 leads</span>
             </div>
             <div class="table-scroll">
-              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Follow-up terakhir</th><th>Indikator</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="leads-table-all"></tbody></table>
+              <table><thead><tr><th>Nama user</th><th>Nomor HP</th><th>Domisili</th><th>Sumber</th><th>Rencana visit</th><th>Visit terlaksana</th><th>Closing</th><th>Follow-up terakhir</th><th>Indikator</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="leads-table-all"></tbody></table>
               <div class="empty-state is-hidden" id="empty-state-all"><span class="empty-icon">⌕</span><strong>Lead tidak ditemukan</strong><span>Coba kata kunci lain.</span></div>
             </div>
           </section>
@@ -333,6 +333,18 @@
         </div>
         <div class="form-error is-hidden" id="edit-lead-error" role="alert"></div>
         <div class="modal-actions"><button class="button button-secondary close-edit-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan perubahan <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="closing-modal">
+      <div class="modal-header"><div><p class="eyebrow">HASIL PENJUALAN</p><h2>Closing lead</h2><p class="muted">Masukkan blok rumah yang berhasil dibooking.</p></div><button class="icon-button close-closing-modal" aria-label="Tutup" type="button">×</button></div>
+      <form id="closing-form">
+        <label class="field-label" for="closing-block">Blok yang dibooking <span class="required">*</span>
+          <input id="closing-block" class="input-control" type="text" maxlength="100" placeholder="Contoh: A12 atau C-05" required>
+        </label>
+        <p class="field-hint">Blok akan disimpan ke spreadsheet pada kolom Blok Booking dan status lead menjadi Closing.</p>
+        <div class="form-error is-hidden" id="closing-error" role="alert"></div>
+        <div class="modal-actions"><button class="button button-secondary close-closing-modal" type="button">Batal</button><button class="button button-primary" type="submit">Simpan closing</button></div>
       </form>
     </dialog>
 

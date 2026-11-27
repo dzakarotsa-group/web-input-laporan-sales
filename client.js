@@ -19,6 +19,7 @@ const state = {
   leadFilter: "all",
   storageMode: "demo",
   editingLeadId: null,
+  editingClosingLeadId: null,
   editingLeaderId: null
 };
 const leadFilterLabels = {
@@ -188,6 +189,8 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       <td>${safeText(lead.domicile || "—")}</td>
       <td><span class="source-pill">${safeText(lead.source || "Lainnya")}</span></td>
       <td>${renderVisitToggle(lead)}</td>
+      <td>${renderVisitCompletedToggle(lead)}</td>
+      <td>${renderClosingButton(lead)}</td>
       <td>${safeText(lastActivity(lead))}</td>
       <td>${renderIndicator(lead.indicator)}</td>
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
@@ -219,6 +222,21 @@ function renderVisitToggle(lead) {
     ? "Akun ini hanya dapat melihat data"
     : "Kolom Rencana Visit tidak ditemukan di spreadsheet";
   return `<button class="visit-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit="${safeText(lead.id)}" aria-label="${action}" aria-pressed="${checked}"${unavailable ? ` disabled title="${title}"` : ""}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : "+"}</span><span>${label}</span></button>`;
+}
+
+function renderVisitCompletedToggle(lead) {
+  const checked = Boolean(lead.visitCompleted);
+  const canToggle = canEditLead(lead) && (lead.visitBooked || checked);
+  const title = !canEditLead(lead)
+    ? "Akun ini hanya dapat melihat data"
+    : canToggle ? "" : "Buat Rencana Visit terlebih dahulu";
+  return `<button class="visit-toggle visit-completed-toggle${checked ? " is-checked" : ""}" type="button" data-toggle-visit-completed="${safeText(lead.id)}" aria-pressed="${checked}"${canToggle ? "" : ` disabled title="${title}"`}><span class="visit-checkmark" aria-hidden="true">${checked ? "✓" : "+"}</span><span>${checked ? "Terlaksana" : "Visit terlaksana"}</span></button>`;
+}
+
+function renderClosingButton(lead) {
+  const readOnly = !canEditLead(lead);
+  const label = lead.blockBooking ? `Closing · ${lead.blockBooking}` : "Closing";
+  return `<button class="button button-secondary closing-button" type="button" data-closing="${safeText(lead.id)}"${readOnly ? ' disabled title="Akun ini hanya dapat melihat data"' : " title=\"Isi atau ubah blok booking\""}>${safeText(label)}</button>`;
 }
 
 function renderMetrics() {
@@ -785,6 +803,60 @@ document.addEventListener("click", async (event) => {
   } catch (error) {
     button.disabled = false;
     showToast(error.message);
+  }
+});
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-toggle-visit-completed]");
+  if (!button) return;
+  const lead = state.leads.find((item) => item.id === button.dataset.toggleVisitCompleted);
+  if (!lead || !canEditLead(lead) || (!lead.visitBooked && !lead.visitCompleted)) return;
+  button.disabled = true;
+  try {
+    await api(`/api/leads/${encodeURIComponent(lead.id)}/visit-completed`, {
+      method: "PATCH",
+      body: JSON.stringify({ visitCompleted: !lead.visitCompleted })
+    });
+    await loadLeads();
+    showToast(lead.visitCompleted
+      ? "Status visit terlaksana dibatalkan."
+      : "Visit berhasil ditandai terlaksana.");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message);
+  }
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-closing]");
+  if (!button) return;
+  const lead = state.leads.find((item) => item.id === button.dataset.closing);
+  if (!lead || !canEditLead(lead)) return;
+  state.editingClosingLeadId = lead.id;
+  byId("closing-block").value = lead.blockBooking || "";
+  setFormError("closing-error", "");
+  byId("closing-modal").showModal();
+});
+
+document.querySelectorAll(".close-closing-modal").forEach((button) => {
+  button.addEventListener("click", () => byId("closing-modal").close());
+});
+byId("closing-modal").addEventListener("click", (event) => {
+  if (event.target === byId("closing-modal")) byId("closing-modal").close();
+});
+byId("closing-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setFormError("closing-error", "");
+  try {
+    await api(`/api/leads/${encodeURIComponent(state.editingClosingLeadId)}/closing`, {
+      method: "PATCH",
+      body: JSON.stringify({ blockBooking: byId("closing-block").value })
+    });
+    await loadLeads();
+    byId("closing-modal").close();
+    showToast("Blok booking berhasil disimpan dan status lead menjadi Closing.");
+  } catch (error) {
+    setFormError("closing-error", error.message);
   }
 });
 
