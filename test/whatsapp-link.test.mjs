@@ -7,6 +7,9 @@ test("normalizes Indonesian phone numbers for WhatsApp chat links", () => {
   assert.equal(whatsappChatUrl("+62 (812) 3456-7890"), "https://wa.me/6281234567890");
   assert.equal(whatsappChatUrl("81234567890"), "https://wa.me/6281234567890");
   assert.equal(whatsappChatUrl("001-415-555-2671"), "https://wa.me/14155552671");
+  assert.equal(whatsappChatUrl("wa.me/6281234567890"), "https://wa.me/6281234567890");
+  assert.equal(whatsappChatUrl("https://wa.me/6281234567890"), "https://wa.me/6281234567890");
+  assert.equal(whatsappChatUrl("https://api.whatsapp.com/send?phone=6281234567890"), "https://wa.me/6281234567890");
 });
 
 test("does not create WhatsApp links for missing, masked, or invalid numbers", () => {
