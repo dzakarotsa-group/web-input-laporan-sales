@@ -43,7 +43,7 @@ const sheetHeaders = {
 };
 const CRM_STATUS_OPTIONS = ["Cold", "Warm", "Hot", "Closing"];
 const CRM_TAHAP_OPTIONS = ["Komunikasi", "Janji Survey", "Survey", "ITJ", "Akad", "Batal"];
-const CRM_SUMBER_OPTIONS = ["Meta Ads", "Tiktok", "Instagram", "Banner", "Poster", "Lihat Langsung"];
+const CRM_SUMBER_OPTIONS = ["FB Ads", "FBMP", "Tiktok", "Instagram", "OTS", "MITRA", "Brosur", "BANER JALAN", "Tiktok Live", "Organik"];
 const TAHAP_TO_STATUS_MAP = {
   "Komunikasi": "Cold",
   "Tanya-Tanya": "Cold",

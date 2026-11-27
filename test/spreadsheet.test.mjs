@@ -190,7 +190,7 @@ test("existing sales sheet data is continued in place and kept separate per sale
     result = await request(app.base, "/api/crm/options");
     assert.ok(result.data.tahap.includes("Komunikasi"));
     assert.equal(result.data.tahap.includes("Tanya-Tanya"), false);
-    assert.deepEqual(result.data.sumber, ["Meta Ads", "Tiktok", "Instagram", "Banner", "Poster", "Lihat Langsung"]);
+    assert.deepEqual(result.data.sumber, ["FB Ads", "FBMP", "Tiktok", "Instagram", "OTS", "MITRA", "Brosur", "BANER JALAN", "Tiktok Live", "Organik"]);
 
     const adminCookie = await login(app.base, "admin", "admin@example.com", "123456");
     result = await request(app.base, "/api/admin/sales", {
