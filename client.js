@@ -39,6 +39,19 @@ const safeText = (value) => String(value ?? "").replace(/[&<>"']/g, (character) 
   "'": "&#39;"
 })[character]);
 
+function setAppLoading(message) {
+  const overlay = byId("loading-overlay");
+  byId("loading-message").textContent = message;
+  overlay.classList.remove("is-hidden");
+  overlay.setAttribute("aria-busy", "true");
+}
+
+function clearAppLoading() {
+  const overlay = byId("loading-overlay");
+  overlay.classList.add("is-hidden");
+  overlay.setAttribute("aria-busy", "false");
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -481,11 +494,18 @@ function setFormError(id, message) {
 }
 
 async function loadLeads() {
-  const data = await api("/api/leads");
-  state.leads = data.leads;
-  state.salesTeams = data.teams || [];
-  renderLeaderTeamNav();
-  render();
+  setAppLoading(state.storageMode === "spreadsheet"
+    ? "Membaca leads dari Google Sheets..."
+    : "Memuat data leads...");
+  try {
+    const data = await api("/api/leads");
+    state.leads = data.leads;
+    state.salesTeams = data.teams || [];
+    renderLeaderTeamNav();
+    render();
+  } finally {
+    clearAppLoading();
+  }
 }
 
 function renderLeaderTeamNav() {
@@ -549,13 +569,20 @@ function renderMarketingLeaders() {
 }
 
 async function loadSalesAccounts() {
-  const data = await api("/api/admin/sales");
-  state.sales = data.sales;
-  renderSalesAccounts();
-  renderLeaderSalesOptions();
-  const leaders = await api("/api/admin/leaders");
-  state.marketingLeaders = leaders.leaders;
-  renderMarketingLeaders();
+  setAppLoading(state.storageMode === "spreadsheet"
+    ? "Membaca akun sales dan leader dari Google Sheets..."
+    : "Memuat data akun...");
+  try {
+    const data = await api("/api/admin/sales");
+    state.sales = data.sales;
+    renderSalesAccounts();
+    renderLeaderSalesOptions();
+    const leaders = await api("/api/admin/leaders");
+    state.marketingLeaders = leaders.leaders;
+    renderMarketingLeaders();
+  } finally {
+    clearAppLoading();
+  }
 }
 
 function enterWorkspace(user) {
@@ -638,6 +665,7 @@ document.querySelectorAll("[data-login-role]").forEach((button) => {
 byId("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   setFormError("login-error", "");
+  setAppLoading("Memeriksa akun...");
   try {
     const user = await api("/api/auth/login", {
       method: "POST",
@@ -649,6 +677,7 @@ byId("login-form").addEventListener("submit", async (event) => {
     });
     enterWorkspace(user.user);
   } catch (error) {
+    clearAppLoading();
     setFormError("login-error", error.message);
   }
 });
@@ -1069,6 +1098,7 @@ byId("leaders-table-body").addEventListener("click", async (event) => {
   }
 });
 
+setAppLoading("Menghubungkan ke server dan memeriksa sesi...");
 api("/api/health").then(({ mode }) => {
   state.storageMode = mode;
   if (mode === "spreadsheet") {
@@ -1087,6 +1117,7 @@ api("/api/health").then(({ mode }) => {
 }).then(({ user }) => {
   enterWorkspace(user);
 }).catch((error) => {
+  clearAppLoading();
   if (error.status !== 401) setFormError("login-error", error.message);
 });
 

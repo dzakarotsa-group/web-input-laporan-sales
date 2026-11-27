@@ -386,6 +386,18 @@
       </form>
     </dialog>
 
+    <div class="loading-overlay" id="loading-overlay" role="status" aria-live="polite" aria-busy="true">
+      <div class="loading-card">
+        <div class="loading-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M7 15l4-4 3 2 5-7"/><path d="M16 6h3v3"/></svg>
+        </div>
+        <p class="eyebrow">LEAD DESK</p>
+        <h2>Menyiapkan data</h2>
+        <p class="loading-message" id="loading-message">Menghubungkan ke server dan memeriksa sesi...</p>
+        <div class="loading-progress" aria-hidden="true"><span></span></div>
+        <span class="loading-hint">Mohon tunggu sebentar</span>
+      </div>
+    </div>
     <div class="toast-region" id="toast-region" aria-live="polite"></div>
   </body>
 </html>
