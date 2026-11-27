@@ -188,11 +188,11 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       ${columns}
       <td>${safeText(lead.domicile || "—")}</td>
       <td><span class="source-pill">${safeText(lead.source || "Lainnya")}</span></td>
+      <td>${renderIndicator(lead.indicator)}</td>
       <td>${renderVisitToggle(lead)}</td>
       <td>${renderVisitCompletedToggle(lead)}</td>
       <td>${renderClosingButton(lead)}</td>
       <td>${safeText(lastActivity(lead))}</td>
-      <td>${renderIndicator(lead.indicator)}</td>
       <td><span class="status-pill ${needsFollowUp(lead) ? "status-due" : "status-not-due"}">${leadStatus(lead)}</span></td>
       <td>${actions}</td>
     </tr>`;
