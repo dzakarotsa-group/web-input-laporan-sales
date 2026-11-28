@@ -210,6 +210,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .row-action:hover { border-color: #e6e7f2; color: var(--primary); background: #f7f7ff; }
 .whatsapp-action { width: 32px; color: #128c7e; font-size: 9px; font-weight: 700; text-decoration: none; }
 .whatsapp-action:hover { border-color: #d7eee8; color: #0c7468; background: #effaf6; }
+.delete-lead-action { color: #b74949; font-size: 19px; }
+.delete-lead-action:hover { border-color: #f0d7d7; color: #a52f2f; background: #fff4f4; }
+.delete-lead-action:disabled { cursor: wait; opacity: .55; }
 .empty-state { min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: #989eac; font-size: 11px; }
 .empty-state:not(.is-hidden) { display: flex; }
 .empty-state strong { color: #5d6576; font-size: 12px; }

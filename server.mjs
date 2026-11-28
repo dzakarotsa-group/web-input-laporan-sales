@@ -36,6 +36,7 @@ let sheetsAccessToken = "";
 let sheetsAccessTokenExpiresAt = 0;
 const sheetsReadyPromises = new Map();
 const leadTableCache = new Map();
+const leadCreationRequests = new Map();
 const sheetHeaders = {
   sales_accounts: ["id", "name", "email", "password_salt", "password_hash", "spreadsheet_url", "is_active", "created_at"],
   marketing_leaders: ["id", "name", "email", "password_salt", "password_hash", "sales_ids", "is_active", "created_at", "spreadsheet_url"],
@@ -912,6 +913,61 @@ async function createSalesLead(lead, ownerRole = "sales") {
   return lead;
 }
 
+async function createSalesLeadOnce(lead, requestKey, ownerRole) {
+  const key = String(requestKey || "").trim();
+  if (!key || key.length > 100) return createSalesLead(lead, ownerRole);
+
+  const now = Date.now();
+  for (const [storedKey, entry] of leadCreationRequests) {
+    if (entry.expiresAt <= now) leadCreationRequests.delete(storedKey);
+  }
+  const operationKey = `${lead.ownerId}:${key}`;
+  const existing = leadCreationRequests.get(operationKey);
+  if (existing) return existing.promise;
+
+  const promise = Promise.resolve().then(() => createSalesLead(lead, ownerRole));
+  leadCreationRequests.set(operationKey, { promise, expiresAt: now + 10 * 60_000 });
+  try {
+    return await promise;
+  } catch (error) {
+    leadCreationRequests.delete(operationKey);
+    throw error;
+  }
+}
+
+async function deleteSalesLead(lead, ownerRole = "sales") {
+  if (!sheetsEnabled) {
+    const index = leads.findIndex((item) => item.id === lead.id && item.ownerId === lead.ownerId);
+    if (index < 0) return false;
+    leads.splice(index, 1);
+    return true;
+  }
+  const account = ownerRole === "leader"
+    ? await findMarketingLeaderById(lead.ownerId)
+    : await findSalesAccountById(lead.ownerId);
+  if (!account?.spreadsheetUrl) throw new Error("Spreadsheet akun belum diatur oleh admin.");
+  const targetSpreadsheetId = googleSpreadsheetId(account.spreadsheetUrl);
+  if (!targetSpreadsheetId) throw new Error("Link spreadsheet akun tidak valid.");
+  const table = await findLeadTable(targetSpreadsheetId);
+  const range = `${quoteSheetTitle(table.title)}!A${table.headerRow + 1}:AZ`;
+  const { values = [] } = await sheetsRequest(
+    `values/${encodeURIComponent(range)}`, {}, targetSpreadsheetId
+  );
+  const rowIndex = values.findIndex((row, index) => {
+    const rowNumber = table.headerRow + index + 1;
+    return spreadsheetLeadId(row, rowNumber, table.columns) === lead.id;
+  });
+  if (rowIndex < 0) return false;
+
+  const rowNumber = table.headerRow + rowIndex + 1;
+  const clearRange = `${quoteSheetTitle(table.title)}!A${rowNumber}:AZ${rowNumber}`;
+  await sheetsRequest(`values/${encodeURIComponent(clearRange)}:clear`, {
+    method: "POST",
+    body: "{}"
+  }, targetSpreadsheetId);
+  return true;
+}
+
 async function saveSalesLead(lead, followUpNumber, ownerRole = "sales") {
   if (!sheetsEnabled) {
     const indicator = inferLeadIndicator(latestCommunication(lead));
@@ -1442,10 +1498,36 @@ export async function handleRequest(request, response) {
           late: todayLocal() > addDays(followUpDate, 2)
         }]
       };
-      const savedLead = await createSalesLead(lead, session.role);
+      const savedLead = await createSalesLeadOnce(
+        lead,
+        request.headers["idempotency-key"],
+        session.role
+      );
       sendJson(response, 201, { lead: savedLead });
     } catch (error) {
       sendRouteError(response, error, "Data lead tidak valid.");
+    }
+    return;
+  }
+
+  const leadDeleteMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
+  if (leadDeleteMatch && request.method === "DELETE") {
+    if (!["sales", "leader"].includes(session.role)) {
+      sendJson(response, 403, { error: "Akses data lead tidak diizinkan." });
+      return;
+    }
+    try {
+      const ownerId = session.role === "leader" ? session.leaderId : session.salesId;
+      const leadId = decodeURIComponent(leadDeleteMatch[1]);
+      const lead = (await listSalesLeads(ownerId, session.role))
+        .find((item) => item.id === leadId && (session.role !== "leader" || item.isOwnLead !== false));
+      if (!lead || !await deleteSalesLead(lead, session.role)) {
+        sendJson(response, 404, { error: "Lead tidak ditemukan." });
+        return;
+      }
+      sendJson(response, 200, { deleted: true });
+    } catch (error) {
+      sendRouteError(response, error, "Lead tidak dapat dihapus.");
     }
     return;
   }

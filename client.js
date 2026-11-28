@@ -269,7 +269,7 @@ function renderLeadRows(targetId, query = "", includePhone = false) {
       ? `<a class="row-action whatsapp-action" href="${safeText(whatsappUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Buka WhatsApp untuk ${safeText(displayName)}" title="Chat WhatsApp">WA</a>`
       : "";
     const editActions = canEditLead(lead)
-      ? `<button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}" title="Edit lead">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Catat follow-up untuk ${safeText(lead.nameUser)}" title="Catat hasil follow-up">›</button>`
+      ? `<button class="row-action" type="button" data-edit-lead="${safeText(lead.id)}" aria-label="Edit data ${safeText(lead.nameUser)}" title="Edit lead">✎</button><button class="row-action" type="button" data-follow-up="${safeText(lead.id)}" aria-label="Catat follow-up untuk ${safeText(lead.nameUser)}" title="Catat hasil follow-up">›</button><button class="row-action delete-lead-action" type="button" data-delete-lead="${safeText(lead.id)}" aria-label="Hapus data ${safeText(lead.nameUser)}" title="Hapus lead">×</button>`
       : "";
     const actions = whatsappAction || editActions
       ? `<div class="row-actions">${whatsappAction}${editActions}</div>`
@@ -795,6 +795,7 @@ document.addEventListener("click", (event) => {
 
 document.querySelectorAll("[data-open-form='new-lead']").forEach((button) => {
   button.addEventListener("click", () => {
+    byId("new-lead-form").dataset.idempotencyKey = crypto.randomUUID();
     byId("lead-fu1-date").value = todayLocal();
     byId("lead-fu1-late").classList.add("is-hidden");
     byId("new-lead-modal").showModal();
@@ -816,11 +817,21 @@ byId("lead-fu1-date").addEventListener("input", () => {
 byId("new-lead-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  if (form.dataset.submitting === "true") return;
+  form.dataset.submitting = "true";
+  const submitButton = form.querySelector('[type="submit"]');
+  const formButtons = [...form.querySelectorAll("button")];
+  formButtons.forEach((button) => { button.disabled = true; });
+  submitButton.disabled = true;
   setFormError("new-lead-error", "");
   const formData = new FormData(form);
   const input = Object.fromEntries(formData.entries());
   try {
-    await api("/api/leads", { method: "POST", body: JSON.stringify(input) });
+    await api("/api/leads", {
+      method: "POST",
+      headers: { "Idempotency-Key": form.dataset.idempotencyKey },
+      body: JSON.stringify(input)
+    });
     await loadLeads();
     form.reset();
     byId("lead-sales").value = "Anisa";
@@ -829,7 +840,14 @@ byId("new-lead-form").addEventListener("submit", async (event) => {
     showToast("Lead berhasil disimpan.");
   } catch (error) {
     setFormError("new-lead-error", error.message);
+  } finally {
+    form.dataset.submitting = "false";
+    formButtons.forEach((button) => { button.disabled = false; });
   }
+});
+
+byId("new-lead-modal").addEventListener("cancel", (event) => {
+  if (byId("new-lead-form").dataset.submitting === "true") event.preventDefault();
 });
 
 byId("fu-picker").addEventListener("click", (event) => {
@@ -894,6 +912,24 @@ byId("next-lead-page").addEventListener("click", () => {
 });
 
 document.addEventListener("click", (event) => {
+  const deleteAction = event.target.closest("[data-delete-lead]");
+  if (deleteAction) {
+    const lead = state.leads.find((item) => item.id === deleteAction.dataset.deleteLead);
+    if (!lead || !canEditLead(lead) || deleteAction.disabled) return;
+    const name = String(lead.nameUser || lead.phone || "lead").trim();
+    if (!window.confirm(`Hapus lead "${name}"? Data yang dihapus tidak dapat dikembalikan.`)) return;
+    deleteAction.disabled = true;
+    api(`/api/leads/${encodeURIComponent(lead.id)}`, { method: "DELETE" })
+      .then(async () => {
+        await loadLeads();
+        showToast("Lead berhasil dihapus.");
+      })
+      .catch((error) => {
+        deleteAction.disabled = false;
+        showToast(error.message, "error");
+      });
+    return;
+  }
   const editAction = event.target.closest("[data-edit-lead]");
   if (editAction) {
     const lead = state.leads.find((item) => item.id === editAction.dataset.editLead);

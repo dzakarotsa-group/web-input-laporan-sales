@@ -127,6 +127,15 @@ test("existing sales sheet data is continued in place and kept separate per sale
     const title = encodedTitle.replace(/^'|'$/g, "").replace(/''/g, "'");
     const rows = workbook?.get(title);
     assert.ok(rows, `missing mock sheet: ${title}`);
+    if (url.pathname.endsWith(":clear")) {
+      const clearRange = cells.replace(/:clear$/, "");
+      const firstRow = Number(clearRange.match(/\d+/)?.[0] || 1);
+      const lastRow = Number(clearRange.match(/:(?:[A-Z]+)(\d+)$/)?.[1] || firstRow);
+      for (let rowNumber = firstRow; rowNumber <= lastRow; rowNumber += 1) {
+        if (rows[rowNumber - 1]) rows[rowNumber - 1] = rows[rowNumber - 1].map(() => "");
+      }
+      return Response.json({ clearedRange: `${title}!${clearRange}` });
+    }
     const firstRow = Number(cells.match(/\d+/)?.[0] || 1);
     if (!init.method || init.method === "GET") {
       return Response.json({
@@ -158,12 +167,13 @@ test("existing sales sheet data is continued in place and kept separate per sale
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     return { server, base: `http://127.0.0.1:${server.address().port}` };
   };
-  const request = async (base, path, { method = "GET", body, cookie } = {}) => {
+  const request = async (base, path, { method = "GET", body, cookie, headers = {} } = {}) => {
     const response = await realFetch(`${base}${path}`, {
       method,
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
-        ...(cookie ? { Cookie: cookie } : {})
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...headers
       },
       ...(body ? { body: JSON.stringify(body) } : {})
     });
@@ -376,12 +386,23 @@ test("existing sales sheet data is continued in place and kept separate per sale
     result = await request(app.base, "/api/leads", {
       method: "POST",
       cookie: salesCookie,
+      headers: { "Idempotency-Key": "double-click-create-lead-test" },
       body: { nameUser: "Dina", phone: "08123456789", domicile: "Surabaya", followUpDate: lateDate }
     });
     assert.equal(result.response.status, 201, JSON.stringify(result.data));
     const leadId = result.data.lead.id;
     assert.equal(result.data.lead.followUps[0].late, true);
     assert.equal(result.data.lead.tahap, "Komunikasi");
+    const firstCreatedRowCount = workbooks.get("siti-sheet-id").get("Input Harian").length;
+    const retriedCreate = await request(app.base, "/api/leads", {
+      method: "POST",
+      cookie: salesCookie,
+      headers: { "Idempotency-Key": "double-click-create-lead-test" },
+      body: { nameUser: "Dina", phone: "08123456789", domicile: "Surabaya", followUpDate: lateDate }
+    });
+    assert.equal(retriedCreate.response.status, 201, JSON.stringify(retriedCreate.data));
+    assert.equal(retriedCreate.data.lead.id, leadId);
+    assert.equal(workbooks.get("siti-sheet-id").get("Input Harian").length, firstCreatedRowCount);
 
     result = await request(app.base, `/api/leads/${leadId}`, {
       method: "PATCH",
@@ -494,6 +515,11 @@ test("existing sales sheet data is continued in place and kept separate per sale
       }
     });
     assert.equal(result.response.status, 404);
+    result = await request(app.base, `/api/leads/${budiLeadId}`, {
+      method: "DELETE",
+      cookie: leaderCookie
+    });
+    assert.equal(result.response.status, 404);
     result = await request(app.base, `/api/admin/leaders/${leaderId}`, {
       method: "PATCH",
       cookie: adminCookie,
@@ -557,6 +583,16 @@ test("existing sales sheet data is continued in place and kept separate per sale
     assert.equal(result.data.leads.length, 1);
     assert.equal(result.data.leads[0].nameUser, "Lead Budi");
     assert.equal(result.data.leads[0].followUps[1].result, "Follow-up Budi");
+    const deletedRowNumber = Number(leadId.match(/row:(\d+)/)?.[1] || 6);
+    result = await request(app.base, `/api/leads/${encodeURIComponent(leadId)}`, {
+      method: "DELETE",
+      cookie: afterRestartCookie
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.deleted, true);
+    assert.ok(workbooks.get("siti-sheet-id").get("Input Harian")[deletedRowNumber - 1].every((cell) => cell === ""));
+    result = await request(app.base, "/api/leads", { cookie: afterRestartCookie });
+    assert.equal(result.data.leads.length, 2);
   } finally {
     if (app) await new Promise((resolve) => app.server.close(resolve));
     globalThis.fetch = realFetch;
